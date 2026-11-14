@@ -120,7 +120,7 @@ TUNE = {
     "warrior": {
         "PELVIS_H": 1.0,
         "PELVIS_V": 0.45,
-        "PELVIS_Z": 14.5,
+        "PELVIS_Z": 16.7,  # The updated warrior's Idle soles were 2.2 cm below their rest height.
         "ARM_ABDUCT": {"RightArm": ((0.7071, 0.0, -0.7071), 20.0), "LeftArm": ((-0.7071, 0.0, -0.7071), 15.0)},
         "FINGER_CURL": {"Right": 35.0, "Left": 35.0},
     },

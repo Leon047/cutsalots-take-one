@@ -5,6 +5,7 @@
 #include "CanvasItem.h"
 #include "Engine/Canvas.h"
 #include "Engine/Font.h"
+#include "Engine/Texture2D.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
@@ -529,9 +530,26 @@ void ATSCHUD::DrawBuildBar(ATSCGameMode* GM)
 	const float Bs = 92.f, Gap = 14.f;
 	const float W = 5.f * Bs + 4.f * Gap + 48.f;
 	const float X = SW * 0.5f - W * 0.5f, Y = SH - 150.f;
+	if (!bTriedLoadingBuildToolbar)
+	{
+		bTriedLoadingBuildToolbar = true;
+		BuildToolbarTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Vikings/UI/T_BuildToolbar.T_BuildToolbar"));
+	}
+	const bool bHasArtwork = BuildToolbarTexture && BuildToolbarTexture->GetResource();
+	// Pixel bounds in T_BuildToolbar.png. Skip the white margins above and below the wood.
+	constexpr float SourceWidth = 2172.f, SourceHeight = 724.f;
+	constexpr float StripTop = 179.f, StripBottom = 544.f;
+	constexpr float FrameTop = 228.f, FrameBottom = 506.f;
+	constexpr float FrameLeft[] = {138.f, 543.f, 937.f, 1335.f, 1734.f};
+	constexpr float FrameRight[] = {483.f, 884.f, 1279.f, 1678.f, 2075.f};
+	const float ArtScale = W / SourceWidth;
+	const float ArtY = Y + 8.f;
 	WoodPanel(X, Y, W, 136.f);
-	Knot(X + 14.f, Y + 68.f, 6.f, FLinearColor(Gold.R, Gold.G, Gold.B, 0.4f));
-	Knot(X + W - 14.f, Y + 68.f, 6.f, FLinearColor(Gold.R, Gold.G, Gold.B, 0.4f));
+	if (bHasArtwork)
+	{
+		DrawTexture(BuildToolbarTexture, X * U, ArtY * U, W * U, (StripBottom - StripTop) * ArtScale * U,
+			0.f, (StripTop + 0.5f) / SourceHeight, 1.f, (StripBottom - StripTop - 1.f) / SourceHeight);
+	}
 	const bool bPlot = GM->FreePlot() >= 0;
 	const ETSCDayOnePrompt Prompt = GM->GetDayOnePrompt();
 	int32 HoverIdx = -1;
@@ -539,17 +557,36 @@ void ATSCHUD::DrawBuildBar(ATSCGameMode* GM)
 	{
 		const TSC::EBuilding Type = (TSC::EBuilding)I;
 		const bool bCan = GM->CanBuild(Type);
-		const float Bx = X + 24.f + I * (Bs + Gap), By = Y + 12.f;
-		Button(IdBuild + I, Bx, By, Bs, Bs, FString(), bCan);
+		const float Bx = X + (bHasArtwork ? FrameLeft[I] * ArtScale : 24.f + I * (Bs + Gap));
+		const float By = bHasArtwork ? ArtY + (FrameTop - StripTop) * ArtScale : Y + 12.f;
+		const float Bw = bHasArtwork ? (FrameRight[I] - FrameLeft[I]) * ArtScale : Bs;
+		const float Bh = bHasArtwork ? (FrameBottom - FrameTop) * ArtScale : Bs;
+		const bool bHover = Hover(Bx, By, Bw, Bh);
+		if (bHasArtwork)
+		{
+			if (bCan)
+			{
+				Hits.Add({FBox2D(FVector2D(Bx * U, By * U), FVector2D((Bx + Bw) * U, (By + Bh) * U)), IdBuild + I});
+				if (bHover) { Box(Bx + 4.f, By + 4.f, Bw - 8.f, Bh - 8.f, FLinearColor(1.f, 0.72f, 0.28f, 0.12f)); }
+			}
+			else
+			{
+				Box(Bx, By, Bw, Bh, FLinearColor(0.f, 0.f, 0.f, 0.58f));
+			}
+		}
+		else
+		{
+			Button(IdBuild + I, Bx, By, Bw, Bh, FString(), bCan);
+			BuildIcon(I, Bx + Bw * 0.5f, By + Bh * 0.5f - 4.f, 1.f, bCan ? 1.f : 0.35f);
+		}
 		if (bCan && Prompt == ETSCDayOnePrompt::Build)
 		{
-			Frame(Bx - 3.f, By - 3.f, Bs + 6.f, Bs + 6.f, Gold, 3.f);
+			Frame(Bx - 3.f, By - 3.f, Bw + 6.f, Bh + 6.f, Gold, 3.f);
 		}
-		if (Hover(Bx, By, Bs, Bs)) { HoverIdx = I; }
-		BuildIcon(I, Bx + Bs * 0.5f, By + Bs * 0.5f - 4.f, 1.f, bCan ? 1.f : 0.35f);
+		if (bHover) { HoverIdx = I; }
 		Txt(FString::FromInt(I + 1), Bx + 9.f, By + 6.f, 14.f, Dim);
 		const int32 Cost = GM->BuildCost(Type);
-		Txt(FString::Printf(TEXT("%d wood"), Cost), Bx + Bs * 0.5f, By + Bs + 4.f, 15.f, GM->Wood >= Cost ? Parchment : FLinearColor(1.f, 0.45f, 0.35f, 1.f), 1);
+		Txt(FString::Printf(TEXT("%d wood"), Cost), Bx + Bw * 0.5f, Y + 108.f, 15.f, GM->Wood >= Cost ? Parchment : FLinearColor(1.f, 0.45f, 0.35f, 1.f), 1);
 	}
 	if (HoverIdx >= 0)
 	{

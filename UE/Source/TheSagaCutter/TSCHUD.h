@@ -7,6 +7,7 @@
 #include "TSCHUD.generated.h"
 
 class ATSCGameMode;
+class UTexture2D;
 
 /**
  * Whole UI drawn on the canvas: carved-wood resource bar, job panel, build bar, health bars and need bubbles,
@@ -57,6 +58,10 @@ private:
 	void DrawTitle(ATSCGameMode* GM);
 	void DrawEpilogue(ATSCGameMode* GM);
 	void BuildIcon(int32 Type, float Cx, float Cy, float S, float Alpha);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> BuildToolbarTexture;
+	bool bTriedLoadingBuildToolbar = false;
 
 	TArray<FHit> Hits;
 	FVector2D Mouse = FVector2D(-1.f, -1.f);

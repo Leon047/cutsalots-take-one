@@ -1,7 +1,7 @@
 ---
 name: tripo-character
-description: Turn one reference image of a character into a rigged, textured, animated skeletal mesh in TheSagaCutter and make a game unit use it. Pipeline: T-pose sheet in ChatGPT, model + auto-rig in Tripo Studio, clean-up in Blender, import / retarget / sockets in Unreal, C++ routing, review in play mode. Use when the user says "/tripo-character", "make a 3D model from this image", "generate a character from the reference", "replace the <unit> model with this picture", "add another axolotl class" or similar. Needs the user's signed-in ChatGPT and Tripo Studio in Chrome, Blender, and the ue-editor skill.
-argument-hint: "<reference image path> <key> [which unit / role it replaces] [notes]"
+description: Turn one reference image of a character into a rigged, textured, animated skeletal mesh in TheSagaCutter and make a game unit use it, or bring an updated version of a character that is already in the game (new reference, new T-pose, new Tripo model or export) and replace the old one, redoing only the steps that are stale. Pipeline: T-pose sheet in ChatGPT, model + auto-rig in Tripo Studio, clean-up in Blender, import / retarget / sockets in Unreal, C++ routing, review in play mode. Use when the user says "/tripo-character", "make a 3D model from this image", "generate a character from the reference", "replace the <unit> model with this picture", "add another axolotl class", "I remodelled the <character>, bring it in", "update the <character> model" or similar. Needs the user's signed-in ChatGPT and Tripo Studio in Chrome, Blender, and the ue-editor skill.
+argument-hint: "<key> [reference image | Tripo export zip / fbx] [which unit / role it replaces] [notes]"
 ---
 
 # tripo-character
@@ -11,12 +11,58 @@ blacksmith and jarl. Full history with every measured value: `Docs/Plans/axolotl
 `Docs/Plans/axolotl-all-classes.md`. Read their "Result" sections when something here is unclear.
 
 Arguments:
-- `<reference image>` — the picture of the character. Required; ask once if missing.
 - `<key>` — short lowercase name, letters only (`archer`). `<Key>` below is `key.capitalize()`.
-- which game unit it replaces (a role in `ETSCRole`, named or unnamed). Ask if not given.
+- `<reference image>` — the picture of the character. Required for a new character; ask once if missing.
+- or a Tripo export (`.zip`, or a rigged `.fbx` with its `.fbm` folder) of a model the user already made.
+- which game unit it replaces (a role in `ETSCRole`, named or unnamed). Ask if not given and not already routed.
 
-**Ask before you start:** which unit the model replaces, and how many Tripo credits you may spend without asking again
-(one clean pass is 75: 55 generate + 20 rig). Every credit spend beyond that allowance needs a yes.
+**First decide the mode.** If `Art/Tripo/axolotl_<key>/` or `/Game/Characters/axolotl_<key>` exists, or the user gives
+a finished model, this is an **update**: go to "Update an existing character" below and do only the steps it names.
+Otherwise it is a new character: do steps 1-7 in order.
+
+**Ask before you start** (new character): which unit the model replaces, and how many Tripo credits you may spend
+without asking again (one clean pass is 75: 55 generate + 20 rig). Every credit spend beyond that allowance needs a yes.
+
+## Update an existing character
+
+The names stay the same, so the new assets replace the old ones in place and the game picks them up with no code
+change. Do not ask which unit it replaces: `TSCUnit.cpp` already says. Ask about credits only if step 2 has to
+generate or rig.
+
+1. Find where to start: `sh .claude/skills/tripo-character/scripts/stage_status.sh <key>`. It lists every stage (file,
+   time, git state) and names the first stale step. What the user said wins over the script; file times are only a
+   hint after a clone or a merge, and exports placed before this script learned to `touch` them carry wrong times.
+
+   | What is new | Start at |
+   |---|---|
+   | Reference picture | step 1 |
+   | T-pose image (`tripo_input/<key>_front.png`) | step 2, generate |
+   | A model the user made in Tripo, not exported yet | step 2, at "Open the result" (rig only if it has no rig) |
+   | An export zip or FBX (argument, or newest in Downloads) | step 2, the `place_tripo_export.sh` line only |
+   | `rigged/<key>_rigged.fbx` already replaced | step 3 |
+   | Only a `TAIL` entry | step 3 |
+   | Only `TUNE` (retarget) | step 4, retarget and sockets calls |
+   | Only `SOCKET_TUNE` | step 4, sockets call |
+
+   A zip given as an argument: `place_tripo_export.sh <key> <zip>`. An FBX given as an argument: copy it to
+   `rigged/<key>_rigged.fbx` and its texture folder to `rigged/<key>_rigged.fbm/`.
+2. Check that the old result is safe before overwriting: `git status --short Art/Tripo/axolotl_<key>
+   UE/Content/Characters/axolotl_<key>` must show the old files committed (the new input may show as changed). If old
+   outputs are uncommitted, copy the two folders to the scratchpad first.
+3. Run from the start step **through step 4 and step 6 without skipping in between**: every step reads the output of
+   the one before it. Step 3 and step 4 always run in full after a new mesh (use `FORCE_TEXTURES_AND_MATERIAL = True`).
+4. A new mesh makes the per-character numbers stale. They were measured on the old body:
+   - `TAIL["<key>"]` in `prep_axolotl.py`: comment the entry out, run step 3 in auto mode, then measure again as step 3
+     says. Do not trust the old thresholds even if the stills look right at first sight.
+   - `TUNE["<key>"]` and `SOCKET_TUNE["<key>"]`: keep them as the first try, then check soles and grip again (steps 4
+     and 6) and change them only if the checks fail.
+   A retexture of the same mesh (same vertices, new maps) keeps all three.
+5. Skip step 5 when `stage_status.sh` shows the C++ routing present: no build, no editor restart. Skip step 7 when the
+   character is already on the Tripo line. Do them only if the role changes or the entry is missing.
+6. In step 6 compare with the old stills before they are overwritten (`git show HEAD:Art/Tripo/axolotl_<key>/review_day.png
+   > <scratch>/old_review_day.png`). Report what changed for the better and for the worse.
+
+Several characters updated at once: Tripo generations can run together, but place, clean and import one key at a time.
 
 ## Names (all derived from the key)
 
@@ -27,7 +73,7 @@ Arguments:
 | Blender outputs | `Art/Tripo/axolotl_<key>/SK_Axolotl<Key>.fbx`, `T_Axolotl<Key>_*.jpg`, `<key>_bones.json`, `check_*.png` |
 | UE folder | `/Game/Characters/axolotl_<key>` |
 | Mesh, material | `Axolotl_<Key>`, `M_Axolotl<Key>` |
-| IK rig, retargeter | `IK_Axolotl_<Key>`, `RTG_Viking_To_Axolotl_<Key>` |
+| IK rig, retargeter | `IK_Axolotl_<Key>`, `RTG_Viking_To_Axolotl_<Key>` (for the warrior: `RTG_Viking_To_Axolotl`) |
 | Clips | `Axolotl_<Key>CharacterArmature_<Clip>` (11 clips) |
 
 The scripts put `Axolotl` in every name, also for a character that is not an axolotl. Keep it: the C++ and all scripts
@@ -58,8 +104,8 @@ https://studio.tripo3d.ai → 3D Workspace → Model → HD Model, single image.
 - Open the result. Check: two arms, two legs, tail, nothing fused, about 30k faces.
 - Rig tool → Humanoid, Skeleton Preset **Mixamo** → Auto Rig (20).
 - Export → FBX, Blender, 4k, Export Skeleton on. The zip lands in Downloads as `tripo_convert_<id>.zip`.
-- `sh .claude/skills/tripo-character/scripts/place_tripo_export.sh <key>` unpacks the newest zip to the export path.
-  Export one character, place it, then export the next (the script takes the newest zip).
+- `sh .claude/skills/tripo-character/scripts/place_tripo_export.sh <key> [zip]` unpacks the zip (default: the newest
+  in Downloads) to the export path, replacing an old export. Export one character, place it, then export the next.
 
 ### 3. Blender clean-up
 ```
@@ -89,7 +135,7 @@ CHAR = "<key>"; exec(open(r"<repo>/Scripts/ue/retarget_axolotl.py").read()); RES
 CHAR = "<key>"; exec(open(r"<repo>/Scripts/ue/sockets_axolotl.py").read()); await run()
 ```
 The import script deletes and recreates the mesh, skeleton, IK rig, retargeter and clips, so after any rerun of it,
-rerun the other two. Do not save `Map_Saga`.
+rerun the other two. Close any open asset editor of the character first, or the delete fails. Do not save `Map_Saga`.
 
 Then verify **by animating**, never by the rest pose (a bad unit import looks fine at rest and tears when it moves):
 - `scripts/capture_clips.py`: `CHAR = "<key>"; OUT_DIR = r"<scratch>"; exec(...); await run([clips], 3, tag="<key>_")`
@@ -126,7 +172,7 @@ Rerun the script after each change so the assets match the scripts. Save stills 
 Add the character to the Tripo line in `Docs/ThirdPartyAssets.md`.
 
 ## Report
-Tell the user: what was made, credits spent, what the stills show, what is still wrong, what was not tested. Do not
+Tell the user: what was made (for an update: which steps ran, which were skipped and why), credits spent, what the stills show, what is still wrong, what was not tested. Do not
 commit unless asked. Each character adds about 17 MB under `UE/Content` (4K textures) and about 35 MB under `Art/`.
 
 ## Known limits (do not promise these)

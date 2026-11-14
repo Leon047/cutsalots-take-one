@@ -375,31 +375,24 @@ def write_bones_json(arm, path, bounds):
 #           blend from the original to `bone` with a smoothstep, so the tail root has no hard seam.
 #   `side` is the sign of X the tail curls to (the figure's left is +X).
 #
-# Warrior: the tail sits behind the body and curls out to the figure's right (+Y and -X), skinned to RightUpLeg.
-# Body ~0.97 m, trunk surface at about |x| <= 0.23, y <= 0.10, right leg/boot at x >= -0.21, y <= 0.03,
-# right forearm/paw at z >= 0.50, y <= 0.01.
-#
 # Auto mode (key without an entry): candidates = y > back_y (back_y = max Y of the vertices dominated by Spine /
 # Spine1, + AUTO_BACK_MARGIN) and z in [hips - AUTO_Z_BELOW, hips + AUTO_Z_ABOVE] (hips = Hips head z) and the
 # dominant bone is a leg bone (AUTO_FROM_BONES); then the same region filter, band and blend. A core under
 # AUTO_MIN_CORE vertices is left alone ("tail: nothing to reweight").
+# Geometry measured on the updated Tripo exports, in metres. The back planes start
+# behind the coat. Include Hips-dominant vertices so the tail blade cannot inherit
+# thigh motion (particularly the jarl, where the entire blade is Hips-dominant).
 TAIL = {
-    "warrior": {"zmin": 0.10, "zmax": 0.56, "back_y": 0.13, "side_x": -0.25, "side_ymin": -0.06, "side": -1,
-                "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": None},
-    # Archer: tail behind (y > 0.11) and out to the figure's right (x < -0.24), z 0.17..0.49; Tripo gave it ~0.54 Hips +
-    # ~0.46 UpLeg, so auto mode (leg-dominated only) finds nothing. Right arm z >= 0.47 (excluded as banned bones).
-    "archer": {"zmin": 0.12, "zmax": 0.50, "back_y": 0.11, "side_x": -0.24, "side_ymin": -0.15, "side": -1,
-               "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": None},
-    # Blacksmith: tail behind (y > 0.105; Spine trunk max y 0.102) and out to the figure's right, x -0.48..0.05, z 0.16..0.54.
-    # Auto mode caught the RightUpLeg-dominated blade (y > 0.132) but left the ~10 cm root stub (y 0.105..0.184, Hips-dominant
-    # with ~0.5-0.7 Left/RightUpLeg). The side test adds nothing here (all tail at x < -0.30 has y > 0.13).
-    "blacksmith": {"zmin": 0.12, "zmax": 0.56, "back_y": 0.105, "side_x": -0.30, "side_ymin": 0.05, "side": -1,
-                   "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": None},
-    # Jarl: tail wholly behind the body (y 0.078..0.337, x -0.476..0.004, z 0.135..0.484), weighted ~0.49 Hips + ~0.28
-    # RightUpLeg + ~0.16 LeftUpLeg + ~0.07 Spine, so auto mode finds nothing. Trunk y <= 0.063, buttock/leg y <= 0.083,
-    # right arm z >= 0.51; nothing but tail at y > 0.085, z < 0.50, so no side test.
-    "jarl": {"zmin": 0.12, "zmax": 0.50, "back_y": 0.085, "side_x": None, "side_ymin": None, "side": None,
-             "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": None},
+    "warrior": {"zmin": 0.14, "zmax": 0.51, "back_y": 0.105, "side_x": -0.25, "side_ymin": 0.02, "side": -1,
+                "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": ["Hips", "*UpLeg"]},
+    "archer": {"zmin": 0.15, "zmax": 0.51, "back_y": 0.095, "side_x": -0.24, "side_ymin": 0.02, "side": -1,
+               "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": ["Hips", "*UpLeg"]},
+    "druid": {"zmin": 0.13, "zmax": 0.52, "back_y": 0.093, "side_x": -0.24, "side_ymin": 0.02, "side": -1,
+              "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": ["Hips", "*UpLeg"]},
+    "blacksmith": {"zmin": 0.14, "zmax": 0.56, "back_y": 0.105, "side_x": -0.26, "side_ymin": 0.03, "side": -1,
+                   "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": ["Hips", "*UpLeg"]},
+    "jarl": {"zmin": 0.12, "zmax": 0.53, "back_y": 0.096, "side_x": -0.24, "side_ymin": 0.02, "side": -1,
+             "min_region": 50, "blend": 0.035, "bone": "Hips", "from_bones": ["Hips", "*UpLeg"]},
 }
 AUTO_TAIL = {"min_region": 50, "blend": 0.035, "bone": "Hips"}
 AUTO_FROM_BONES = ["*UpLeg", "*Leg"]
