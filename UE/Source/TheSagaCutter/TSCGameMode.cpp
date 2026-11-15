@@ -205,6 +205,10 @@ void ATSCGameMode::PlayDogSound(const ATSCUnit& Dog, ETSCDogSound Cue)
 	case ETSCDogSound::Pant: Sound = DogPant; Volume = 0.48f; break;
 	case ETSCDogSound::Growl: Sound = DogGrowl; Volume = 0.65f; break;
 	case ETSCDogSound::AttackBark: Sound = DogAttackBark; Volume = 0.72f; break;
+	case ETSCDogSound::AlertBark: // loud barking at a boar
+		if (!DogBarks.IsEmpty()) { Sound = DogBarks[FMath::RandHelper(DogBarks.Num())]; }
+		Volume = 1.f;
+		break;
 	}
 	if (!Sound) { return; }
 

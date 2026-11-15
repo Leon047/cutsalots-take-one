@@ -21,7 +21,7 @@ class UPostProcessComponent;
 class USkyLightComponent;
 
 enum class ETSCPhase : uint8 { Title, Day, Night, Epilogue };
-enum class ETSCDogSound : uint8 { PlayBark, Pant, Growl, AttackBark };
+enum class ETSCDogSound : uint8 { PlayBark, Pant, Growl, AttackBark, AlertBark };
 enum class ETSCDayOnePrompt : uint8 { None, Wood, Food, Build, Cut };
 
 /** Editable regions of the map; every object in a region has a Living and an Ashen version. */

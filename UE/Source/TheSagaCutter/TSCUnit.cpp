@@ -1539,6 +1539,34 @@ void ATSCUnit::Sim(float Dt)
 
 	bDogGrowled = false;
 
+	// ----- husky vs boar: a boar near the dog makes it stop, face the boar and bark loudly at it until it is gone -----
+	if (Role == ETSCRole::Husky && Order != ETSCOrder::Leave && Order != ETSCOrder::Shelter && !IsHidden())
+	{
+		const ATSCUnit* Boar = nullptr;
+		float BestD = BoarAlertRadius;
+		for (const ATSCUnit* U : GM->Units)
+		{
+			if (!U || U->Role != ETSCRole::Boar || !U->IsAlive() || U->IsHidden()) { continue; }
+			const float D = FVector::Dist2D(GetActorLocation(), U->GetActorLocation());
+			if (D < BestD) { BestD = D; Boar = U; }
+		}
+		if (Boar)
+		{
+			PlayTimer = 0.f; // no romping or petting while a boar is about
+			PetTimer = 0.f;
+			DogRunTime = 0.f;
+			const FRotator Face = (Boar->Loc2D() - Loc2D()).Rotation();
+			SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Face.Yaw, 0.f), Dt, 8.f));
+			if (DogSoundCooldown <= 0.f)
+			{
+				GM->PlayDogSound(*this, ETSCDogSound::AlertBark);
+				DogSoundCooldown = FMath::FRandRange(0.8f, 1.3f);
+			}
+			Animate(Dt, false);
+			return;
+		}
+	}
+
 	// ----- mourning: stop, turn toward the fallen, stand a moment, then back to the order -----
 	if (MournTimer > 0.f && Order != ETSCOrder::Leave && Order != ETSCOrder::Shelter)
 	{

@@ -182,6 +182,8 @@ private:
 	float DogRunTime = 0.f;
 	float DogSoundCooldown = 0.f;
 	bool bDogGrowled = false;
+	/** A husky stops and barks at any boar within this distance. */
+	float BoarAlertRadius = 650.f;
 	/** Hakon's husky being scratched: seconds left and where it stands in front of him. */
 	float PetTimer = 0.f;
 	FVector PetSpot = FVector::ZeroVector;
