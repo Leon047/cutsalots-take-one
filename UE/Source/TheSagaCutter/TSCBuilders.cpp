@@ -615,6 +615,51 @@ namespace TSC
 		}
 	}
 
+	void BuildCattlePen(ATSCPrimActor* A, float LenX, float LenY)
+	{
+		// The village's low fence (SM_WoodenFenceSet_01, the one around the garden), laid in sections along the four sides.
+		// The section length and its long axis are read from the mesh, so every side gets a whole number of sections.
+		static UStaticMesh* Rail = LoadNaturalMesh(TEXT("/Game/Props/WoodenFenceSet/SM_WoodenFenceSet_01.SM_WoodenFenceSet_01"));
+		auto Side = [A](const FVector2D& From, const FVector2D& To)
+		{
+			const FVector2D D = To - From;
+			const float Len = D.Size();
+			const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(D.Y, D.X));
+			if (Rail)
+			{
+				const FBoxSphereBounds B = Rail->GetBounds();
+				const bool bAlongX = B.BoxExtent.X >= B.BoxExtent.Y;
+				const float PieceLen = FMath::Max(1.f, (float)(bAlongX ? B.BoxExtent.X : B.BoxExtent.Y) * 2.f);
+				const int32 N = FMath::Max(1, FMath::RoundToInt(Len / PieceLen));
+				const FVector Scale(Len / N / PieceLen);
+				const FRotator Rot(0.f, Yaw - (bAlongX ? 0.f : 90.f), 0.f);
+				const FVector Foot(B.Origin.X, B.Origin.Y, B.Origin.Z - B.BoxExtent.Z);
+				for (int32 I = 0; I < N; ++I)
+				{
+					const FVector2D C = From + D * ((I + 0.5f) / N);
+					A->AddMeshPart(Rail, FVector(C.X, C.Y, 0.f) - Rot.RotateVector(Foot * Scale), Rot, Scale);
+				}
+				return;
+			}
+			// no mesh: posts and two rails
+			const int32 N = FMath::Max(1, FMath::RoundToInt(Len / 150.f));
+			for (int32 I = 0; I <= N; ++I)
+			{
+				const FVector2D P = From + D * ((float)I / N);
+				Post(A, P.X, P.Y, 0.f, 95.f, Pal::TimberDark, 0.1f);
+			}
+			for (const float Z : { 40.f, 75.f })
+			{
+				const FVector2D M = (From + To) * 0.5f;
+				A->AddPart(ETSCShape::Cube, FVector(M.X, M.Y, Z), FRotator(0.f, Yaw, 0.f), FVector(Len / 100.f, 0.06f, 0.06f), Pal::Timber);
+			}
+		};
+		Side(FVector2D(0.f, 0.f), FVector2D(LenX, 0.f));
+		Side(FVector2D(LenX, 0.f), FVector2D(LenX, LenY));
+		Side(FVector2D(LenX, LenY), FVector2D(0.f, LenY));
+		Side(FVector2D(0.f, LenY), FVector2D(0.f, 0.f));
+	}
+
 	void BuildDock(ATSCPrimActor* A, int32 W, int32 H, TArray<int32>& Crates)
 	{
 		for (int32 X = 0; X < W; ++X)

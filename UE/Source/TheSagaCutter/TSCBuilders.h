@@ -51,6 +51,8 @@ namespace TSC
 	void BuildPlotBuilding(ATSCPrimActor* A, EBuilding Type, int32 Seed);
 	/** Crops gets the part indices of the plants, so the boar can trample them. */
 	void BuildGarden(ATSCPrimActor* A, int32 W, int32 H, TArray<int32>& Crops);
+	/** A rectangular pen of low village fence, from local (0,0) to (LenX, LenY) in cm. */
+	void BuildCattlePen(ATSCPrimActor* A, float LenX, float LenY);
 	void BuildDock(ATSCPrimActor* A, int32 W, int32 H, TArray<int32>& Crates);
 	/** One straight palisade segment along local Y from 0 to Len, supports facing local +X: an SM_WoodenFence section
 	 *  (primitive log tiles without the mesh) and the Ashen stone footing. */

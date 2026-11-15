@@ -364,11 +364,10 @@ void ATSCGameMode::SpawnAllWildlife()
 	// Foxes sneak along the forest edges: north of the clearing and behind the grove.
 	SpawnWildlife(ETSCRole::Fox, CellF(6.4f, 2.2f), 300.f, TSCRegion::Forest);
 	SpawnWildlife(ETSCRole::Fox, CellF(10.8f, 25.6f), 300.f, TSCRegion::Grove);
-	// Village livestock grazes in the pasture on the right (east / south-east) side of the village, inside the palisade:
-	// the free ground between the south-east house (23,15) and the wall, clear of the garden and the grove. It never leaves the wall.
-	SpawnWildlife(ETSCRole::Cow, CellF(23.0f, 18.9f), 220.f, TSCRegion::None);
-	SpawnWildlife(ETSCRole::Cow, CellF(24.8f, 19.8f), 220.f, TSCRegion::None);
-	SpawnWildlife(ETSCRole::Bull, CellF(23.9f, 20.9f), 220.f, TSCRegion::None);
+	// Village livestock grazes inside the cattle pen (cells 21..25 x 21..24, built in the level setup): the wander radius keeps them off the fence.
+	SpawnWildlife(ETSCRole::Cow, CellF(22.4f, 22.2f), 130.f, TSCRegion::None);
+	SpawnWildlife(ETSCRole::Cow, CellF(23.6f, 23.0f), 130.f, TSCRegion::None);
+	SpawnWildlife(ETSCRole::Bull, CellF(23.0f, 22.6f), 130.f, TSCRegion::None);
 	// The village dog runs about inside the palisade, between the hall and the pasture, and plays with the jarl.
 	SpawnWildlife(ETSCRole::Husky, CellF(13.0f, 14.6f), 450.f, TSCRegion::None);
 	// Hakon's husky trots after its master.
@@ -717,6 +716,18 @@ void ATSCGameMode::BuildWorld()
 			Flotsam.Add(A);
 			Ocean->AddFloater(A, 80.f, 14.f, 0.f, 0.f, true);
 		}
+	}
+
+	// The cattle pen: a rectangle of village fence on the free ground south of the plots, clear of the grove and the wall.
+	// The livestock graze inside it (see SpawnAllWildlife). Cells just outside the fence are blocked, so nobody walks through it.
+	{
+		const int32 PenX = 21, PenY = 21, PenW = 4, PenH = 3;
+		ATSCPrimActor* Pen = SpawnPrim(CellCorner(PenX, PenY));
+		BuildCattlePen(Pen, PenW * CELL, PenH * CELL);
+		Pen->Refresh();
+		ProDressing.Add(Pen);
+		for (int32 I = -1; I <= PenW; ++I) { SetBlocked(PenX + I, PenY - 1, true); SetBlocked(PenX + I, PenY + PenH, true); }
+		for (int32 J = 0; J < PenH; ++J) { SetBlocked(PenX - 1, PenY + J, true); SetBlocked(PenX + PenW, PenY + J, true); }
 	}
 
 	const FIntPoint Rocks[8] = { {26, 8}, {27, 16}, {26, 19}, {27, 4}, {26, 2}, {27, 21}, {25, 22}, {24, 1} };
