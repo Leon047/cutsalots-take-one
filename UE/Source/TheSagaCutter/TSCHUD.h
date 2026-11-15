@@ -42,6 +42,7 @@ private:
 	void TxtRaw(const FString& S, float X, float Y, float Size, const FLinearColor& C, int32 Align = 0, bool bBold = true);
 	float Wrapped(const FString& S, float X, float Y, float MaxW, float Size, const FLinearColor& C, bool bBold = false, int32 Align = 0);
 	void WoodPanel(float X, float Y, float W, float H);
+	void TexturedWoodPanel(float X, float Y, float W, float H, const FLinearColor& Tint = FLinearColor::White);
 	void Knot(float Cx, float Cy, float R, const FLinearColor& C);
 	bool Button(int32 Id, float X, float Y, float W, float H, const FString& Label, bool bEnabled, float Size = 20.f, const FLinearColor* Tint = nullptr);
 	bool Hover(float X, float Y, float W, float H) const;
@@ -49,6 +50,7 @@ private:
 
 	void DrawWorld(ATSCGameMode* GM);
 	void DrawTop(ATSCGameMode* GM);
+	void DrawResourceIcon(int32 Index, float Cx, float Cy, float Size);
 	void DrawJobs(ATSCGameMode* GM);
 	void DrawBuildBar(ATSCGameMode* GM);
 	void DrawDayOnePrompt(ATSCGameMode* GM);
@@ -62,6 +64,13 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> BuildToolbarTexture;
 	bool bTriedLoadingBuildToolbar = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> ResourceIcons;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> ResourceBarTexture;
+	bool bTriedLoadingResourceIcons = false;
 
 	TArray<FHit> Hits;
 	FVector2D Mouse = FVector2D(-1.f, -1.f);
