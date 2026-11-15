@@ -366,7 +366,7 @@ ATSCUnit* ATSCGameMode::SpawnWildlife(ETSCRole InRole, const FVector& Loc, float
 
 void ATSCGameMode::SpawnAllWildlife()
 {
-	// The stag lives in the forest, outside the palisade (the grove by the stag stone is inside the wall).
+	// The stag lives in the forest, outside the palisade (the grove is inside the wall).
 	SpawnWildlife(ETSCRole::Stag, CellF(2.0f, 21.5f), 320.f, TSCRegion::Forest);
 	// Deer graze in clearings of the western forest (north and south of the road).
 	SpawnWildlife(ETSCRole::Deer, CellF(3.f, 6.f), 350.f, TSCRegion::Forest);
@@ -723,15 +723,6 @@ void ATSCGameMode::BuildWorld()
 		}
 	}
 
-	HammerStone = SpawnPrim(CellCenter(16, 2));
-	BuildRuneStone(HammerStone, true);
-	HammerStone->Refresh();
-	SetBlocked(16, 2, true);
-	StagStone = SpawnPrim(CellCenter(15, 21), TSCRegion::Grove);
-	BuildRuneStone(StagStone, false);
-	StagStone->Refresh();
-	SetBlocked(15, 21, true);
-
 	const FIntPoint Rocks[8] = { {26, 8}, {27, 16}, {26, 19}, {27, 4}, {26, 2}, {27, 21}, {25, 22}, {24, 1} };
 	for (int32 I = 0; I < 8; ++I)
 	{
@@ -877,6 +868,12 @@ void ATSCGameMode::CollectLevelProps()
 			if (!Mesh || Mesh->GetPathName().Contains(TEXT("Mushroom"))) { continue; }  // mushrooms belong to the forest
 		}
 		const FVector P = A->GetActorLocation();
+		if (SM && SM->GetStaticMeshComponent() && SM->GetStaticMeshComponent()->GetStaticMesh()
+			&& SM->GetStaticMeshComponent()->GetStaticMesh()->GetName().Contains(TEXT("SM_Altar")))
+		{
+			AltarPos = P; // the one stone altar: prayers and blessings belong to it
+			bAltarFound = true;
+		}
 		const float Cx = P.X / CELL + GW / 2, Cy = P.Y / CELL + GH / 2;
 		if (Cx < 27.5f && WallShape(Cx, Cy) < 1.08f) { ProLevelProps.Add(A); }
 		else if (Cx < WallCX && IsFenceProp(A)) { ProRoadFence.Add(A); } // the double fence running out of the gate along the road
@@ -889,6 +886,11 @@ void ATSCGameMode::CollectLevelProps()
 		return FVector::DistSquared2D(A.GetActorLocation(), GatePos) < FVector::DistSquared2D(B.GetActorLocation(), GatePos);
 	});
 	for (const AActor* F : ProRoadFence) { ProRoadFenceScale.Add(F->GetActorScale3D()); }
+	if (!bAltarFound)
+	{
+		AltarPos = CellCenter(16, 2);
+		UE_LOG(LogSaga, Warning, TEXT("[Saga] No stone altar (SM_Altar) found in the level, praying at a default spot"));
+	}
 	UE_LOG(LogSaga, Display, TEXT("[Saga] Prologue: %d level props inside the wall, %d road fence pieces"), ProLevelProps.Num(), ProRoadFence.Num());
 }
 
@@ -1657,7 +1659,7 @@ void ATSCGameMode::ComputeRates(float& OutWood, float& OutFood) const
 	int32 Living = 0;
 	for (const ATSCUnit* U : Units) { if (U && U->Team == ETSCTeam::Villager && U->IsAlive()) { ++Living; } }
 	OutWood = NumWood * 1.f * ForestMul + 1.f + ExtraSawmills * 2.f + (Woodcutter && Woodcutter->IsAlive() ? 1.f : 0.f);
-	OutFood = (NumFood * 1.5f * GardenMul + GroveBonus + DockBonus + (Hunter && Hunter->IsAlive() ? 2.f : 0.f) + (bStagShrine ? 2.f : 0.f)) * DayFoodMul - Living * 0.5f;
+	OutFood = (NumFood * 1.5f * GardenMul + GroveBonus + DockBonus + (Hunter && Hunter->IsAlive() ? 2.f : 0.f) + (bStagBlessing ? 2.f : 0.f)) * DayFoodMul - Living * 0.5f;
 }
 
 void ATSCGameMode::EconomyTick()
@@ -1740,13 +1742,13 @@ void ATSCGameMode::UpdateJobs()
 				const FIntPoint C = Plots[BuildPlot].Cell;
 				U->OrderWork(CellF(C.X + 0.4f + (K % 5) * 0.6f, C.Y + 2.35f), CellF(C.X + 0.4f + (K % 5) * 0.6f, C.Y + 2.9f));
 			}
-			else if (K % 2 == 0)
-			{
-				U->OrderWork(CellF(15.6f + (K % 6) * 0.4f, 3.7f), CellF(18.6f + (K % 4) * 0.5f, 14.f)); // pray at the hammer stone
-			}
 			else
 			{
-				U->OrderWork(CellF(14.2f + (K % 6) * 0.4f, 20.2f), CellF(18.6f + (K % 4) * 0.5f, 14.2f)); // pray at the stag stone
+				// pray around the stone altar
+				const float Ang = K * 2.4f;
+				const float Ring = 230.f + (K % 2) * 60.f;
+				const FVector Spot = AltarPos + FVector(FMath::Cos(Ang) * Ring, FMath::Sin(Ang) * Ring, 0.f);
+				U->OrderWork(Spot, CellF(18.6f + (K % 4) * 0.5f, 14.f));
 			}
 		}
 	}
@@ -1773,14 +1775,32 @@ int32 ATSCGameMode::FreePlot() const
 
 bool ATSCGameMode::CanBuild(EBuilding Type) const
 {
-	if (Phase != ETSCPhase::Day || IsFrozen() || FreePlot() < 0 || Wood < BuildCost(Type)) { return false; }
-	for (const FTSCPlot& P : Plots) { if (P.bUsed && P.Type == Type && (Type == EBuilding::HammerShrine || Type == EBuilding::StagShrine)) { return false; } }
-	return true;
+	if (Phase != ETSCPhase::Day || IsFrozen() || Wood < BuildCost(Type)) { return false; }
+	if (Type == EBuilding::HammerBlessing) { return !bHammerBlessing; } // blessings are asked of the altar: no plot needed
+	if (Type == EBuilding::StagBlessing) { return !bStagBlessing; }
+	return FreePlot() >= 0;
 }
 
 void ATSCGameMode::StartBuild(EBuilding Type)
 {
 	if (!CanBuild(Type)) { return; }
+	if (Type == EBuilding::HammerBlessing || Type == EBuilding::StagBlessing)
+	{
+		const bool bHammer = Type == EBuilding::HammerBlessing;
+		Wood -= BuildCost(Type);
+		(bHammer ? bHammerBlessing : bStagBlessing) = true;
+		if (!AltarGlow)
+		{
+			AltarGlow = SpawnPrim(AltarPos);
+		}
+		AltarGlow->AddLight(FVector(0.f, 0.f, 160.f), bHammer ? Pal::Fire : Pal::Shroom, 4.f, 2.f, 600.f);
+		AltarGlow->Refresh();
+		BuiltNames.Add(bHammer ? TEXT("the Hammer's blessing") : TEXT("the Stag's blessing"));
+		Toast(bHammer ? TEXT("The altar glows red-gold: your defenders will strike harder.")
+			: TEXT("The altar glows green: the forest gives more food and sends fewer horrors."));
+		UpdateJobs();
+		return;
+	}
 	const int32 Idx = FreePlot();
 	FTSCPlot& P = Plots[Idx];
 	Wood -= BuildCost(Type);
@@ -1793,7 +1813,7 @@ void ATSCGameMode::StartBuild(EBuilding Type)
 	BuildPlotBuilding(P.Building, Type, Idx + 2);
 	P.Building->SetBuildProgress(0.f);
 	BlockRect(P.Cell.X, P.Cell.Y, W, 2);
-	static const TCHAR* Names[5] = { TEXT("a house"), TEXT("a second sawmill"), TEXT("a healer's hut"), TEXT("a shrine to the Hammer"), TEXT("a shrine to the Stag") };
+	static const TCHAR* Names[3] = { TEXT("a house"), TEXT("a second sawmill"), TEXT("a healer's hut") };
 	Toast(TSCLoc::Fmt(TEXT("Your people begin raising {0}, tile by tile."), { TSCLoc::Tr(Names[(int32)Type]) }));
 	UpdateJobs();
 }
@@ -1830,15 +1850,7 @@ void ATSCGameMode::SimConstruction(float Dt)
 				BuiltNames.Add(TEXT("a healer's hut"));
 				Toast(TEXT("The healer's hut is ready: the wounded will be tended on the final night."));
 				break;
-			case EBuilding::HammerShrine:
-				bHammerShrine = true;
-				BuiltNames.Add(TEXT("a shrine to the Hammer"));
-				Toast(TEXT("The Hammer shrine is consecrated: your defenders will strike harder."));
-				break;
-			case EBuilding::StagShrine:
-				bStagShrine = true;
-				BuiltNames.Add(TEXT("a shrine to the Stag"));
-				Toast(TEXT("The Stag shrine is consecrated: the forest gives more food and sends fewer horrors."));
+			default:
 				break;
 			}
 			UpdateJobs();
@@ -2284,7 +2296,7 @@ void ATSCGameMode::StartNight()
 	bHungryNight = Food < 20.f;
 	bFedNight = Food >= 110.f;
 	const float HpMul = bHungryNight ? 0.72f : (bFedNight ? 1.18f : 1.f);
-	const float DmgMul = bHammerShrine ? 1.3f : 1.f;
+	const float DmgMul = bHammerBlessing ? 1.3f : 1.f;
 
 	auto Arm = [&](ATSCUnit* U, const FVector& Pos)
 	{
@@ -2332,7 +2344,7 @@ void ATSCGameMode::StartNight()
 	ShowBanner(TEXT("The Final Night.  The gate is barred with the last of the timber. Creatures gather in the fog; raiders pull for the shore."), 12.f);
 	Toast(TSCLoc::Tr(FString::Printf(TEXT("%d wood braces the gate (%d strength)."), FMath::RoundToInt(Spent), FMath::RoundToInt(GateMaxHP)))
 		+ TSCLoc::Tr(bHungryNight ? TEXT(" Your defenders are weak with hunger.") : (bFedNight ? TEXT(" Your defenders are well fed.") : TEXT("")))
-		+ TSCLoc::Tr(bHammerShrine ? TEXT(" The Hammer blesses their axes.") : TEXT("")));
+		+ TSCLoc::Tr(bHammerBlessing ? TEXT(" The Hammer blesses their axes.") : TEXT("")));
 }
 
 void ATSCGameMode::GetAssaultGoal(const ATSCUnit* U, FVector& OutPos, ETSCStructure& OutStruct) const
@@ -2398,8 +2410,8 @@ void ATSCGameMode::SimNight(float Dt)
 
 	// creatures: three waves out of the fog. The Stag's blessing thins them.
 	int32 PerWave = 3;
-	const int32 Calm = bStagShrine ? (Scenes[2].bAshen ? 0 : 1) : 0; // the Stag calls some of them back
-	const int32 LastCalm = bStagShrine ? 1 : 0;
+	const int32 Calm = bStagBlessing ? (Scenes[2].bAshen ? 0 : 1) : 0; // the Stag calls some of them back
+	const int32 LastCalm = bStagBlessing ? 1 : 0;
 	auto CreatureWave = [&](int32 N)
 	{
 		for (int32 I = 0; I < N; ++I)
@@ -2524,12 +2536,12 @@ void ATSCGameMode::BuildEpilogue(bool bHallFell)
 	if (Scenes[2].bAshen)
 	{
 		Epilogue.Add(bSigrun
-			? TEXT("You traded the glowing grove for Sigrun the healer. The stag stone stands among dead roots now, but her hands closed many wounds on the final night.")
+			? TEXT("You traded the glowing grove for Sigrun the healer. The grove stands among dead roots now, but her hands closed many wounds on the final night.")
 			: TEXT("You traded the glowing grove for Sigrun the healer, and still the night took her at the longhouse door."));
 	}
 	else if (!Scenes[2].bStarted || bSigrun)
 	{
-		Epilogue.Add(TEXT("Sigrun the healer still gathers by the stag stone, and the grove still glows."));
+		Epilogue.Add(TEXT("Sigrun the healer still gathers in the grove, and the grove still glows."));
 	}
 	else
 	{
@@ -2556,8 +2568,8 @@ void ATSCGameMode::BuildEpilogue(bool bHallFell)
 		FString B = TSCLoc::Tr(BuiltNames[0]);
 		if (BuiltNames.Num() > 1) { B += TSCLoc::Tr(TEXT(" and ")) + TSCLoc::Tr(BuiltNames[1]); }
 		FString Why;
-		if (bHammerShrine) { Why += TSCLoc::Tr(TEXT(" The Hammer put weight in every axe.")); }
-		if (bStagShrine) { Why += TSCLoc::Tr(TEXT(" The Stag called some of the fog back into the trees.")); }
+		if (bHammerBlessing) { Why += TSCLoc::Tr(TEXT(" The Hammer put weight in every axe.")); }
+		if (bStagBlessing) { Why += TSCLoc::Tr(TEXT(" The Stag called some of the fog back into the trees.")); }
 		if (ExtraHealers > 0) { Why += TSCLoc::Tr(TEXT(" The new hut's fires boiled bandages all night.")); }
 		if (HousesBuilt > 0) { Why += TSCLoc::Tr(TEXT(" The newcomers took up shields beside the old families.")); }
 		if (ExtraSawmills > 0) { Why += TSCLoc::Tr(TEXT(" Its timber went into the gate.")); }
@@ -2659,7 +2671,7 @@ void ATSCGameMode::AutoPlay(float Dt)
 	{
 		const TCHAR C = AutoBuild[0];
 		if (C != TEXT('H') && C != TEXT('M') && C != TEXT('E') && C != TEXT('S') && C != TEXT('T')) { AutoBuild.RightChopInline(1); return; }
-		const EBuilding T = C == TEXT('H') ? EBuilding::House : C == TEXT('M') ? EBuilding::Sawmill : C == TEXT('E') ? EBuilding::Healer : C == TEXT('S') ? EBuilding::HammerShrine : EBuilding::StagShrine;
+		const EBuilding T = C == TEXT('H') ? EBuilding::House : C == TEXT('M') ? EBuilding::Sawmill : C == TEXT('E') ? EBuilding::Healer : C == TEXT('S') ? EBuilding::HammerBlessing : EBuilding::StagBlessing;
 		if (CanBuild(T)) { StartBuild(T); AutoBuild.RightChopInline(1); }
 	}
 }

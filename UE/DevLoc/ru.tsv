@@ -40,8 +40,8 @@ Builders / at prayer	Строят / молятся
 House	Дом
 Sawmill	Лесопилка
 Healer's hut	Хижина целителя
-Hammer shrine	Святилище Молота
-Stag shrine	Святилище Оленя
+Hammer blessing	Благословение Молота
+Stag blessing	Благословение Оленя
 Raises the population cap by 3. Two settlers arrive: more workers by day, one more defender at night.	Предел населения +3. Придут двое поселенцев: больше рук днём, на одного защитника больше ночью.
 +2 wood income. Wood left at nightfall braces the west gate.	+2 к добыче древесины. Древесина, оставшаяся к ночи, подопрёт западные ворота.
 Wounded defenders are tended during the final night, even without Sigrun.	В последнюю ночь раненых защитников будут лечить, даже без Сигрун.
@@ -108,13 +108,13 @@ a house	дом
 a new house	новый дом
 a second sawmill	вторую лесопилку
 a healer's hut	хижину целителя
-a shrine to the Hammer	святилище Молота
-a shrine to the Stag	святилище Оленя
+the Hammer's blessing	благословение Молота
+the Stag's blessing	благословение Оленя
 The house stands. Two settlers arrive from the shore: more hands, and more spears for the night.	Дом стоит. С берега пришли двое поселенцев: больше рук и больше копий на ночь.
 The second sawmill is running: +2 wood income.	Вторая лесопилка работает: +2 к добыче древесины.
 The healer's hut is ready: the wounded will be tended on the final night.	Хижина целителя готова: в последнюю ночь раненых будут лечить.
-The Hammer shrine is consecrated: your defenders will strike harder.	Святилище Молота освящено: твои защитники будут бить сильнее.
-The Stag shrine is consecrated: the forest gives more food and sends fewer horrors.	Святилище Оленя освящено: лес дарит больше пищи и шлёт меньше ужасов.
+The altar glows red-gold: your defenders will strike harder.	Алтарь светится красным золотом: твои защитники будут бить сильнее.
+The altar glows green: the forest gives more food and sends fewer horrors.	Алтарь светится зелёным: лес дарит больше пищи и шлёт меньше ужасов.
 
 == Scene 1: the boar ==
 The Boar in the Garden	Вепрь в огороде
@@ -191,9 +191,9 @@ You burned the western forest out of the telling so that no spruce could bar the
 You burned the western forest out of the telling to bring Hakon home through a clear gate. He held it on the last night, and he fell holding it.	Ты выжег западный лес из сказания, чтобы Хакон вернулся через свободные ворота. В последнюю ночь он держал их и пал, не отступив.
 The spruce fell across the gate and you did not cut the scene. Hakon stood alone before the fog and, past all reckoning, lived to see the dawn saws.	Ель упала поперёк ворот, а ты оставил сцену без склейки. Хакон один стоял перед туманом и, вопреки всякому счёту, дожил до рассветных пил.
 The spruce fell across the gate and you let it lie. Hakon the hunter died on the wrong side of it, and in the morning his people sawed that timber into planks and did not speak.	Ель упала поперёк ворот, и ты оставил её лежать. Хакон-охотник погиб по ту сторону, а наутро его люди распилили ту ель на доски и не проронили ни слова.
-You traded the glowing grove for Sigrun the healer. The stag stone stands among dead roots now, but her hands closed many wounds on the final night.	Ты отдал светящуюся рощу за Сигрун-целительницу. Олений камень стоит теперь среди мёртвых корней, но в последнюю ночь её руки закрыли немало ран.
+You traded the glowing grove for Sigrun the healer. The grove stands among dead roots now, but her hands closed many wounds on the final night.	Ты отдал светящуюся рощу за Сигрун-целительницу. Роща стоит теперь среди мёртвых корней, но в последнюю ночь её руки закрыли немало ран.
 You traded the glowing grove for Sigrun the healer, and still the night took her at the longhouse door.	Ты отдал светящуюся рощу за Сигрун-целительницу, и всё же ночь забрала её у дверей длинного дома.
-Sigrun the healer still gathers by the stag stone, and the grove still glows.	Сигрун-целительница всё так же собирает травы у Оленьего камня, и роща всё так же светится.
+Sigrun the healer still gathers in the grove, and the grove still glows.	Сигрун-целительница всё так же собирает травы в роще, и роща всё так же светится.
 You kept the grove and its glowing harvest. Sigrun the healer breathed its spores and did not rise, and on the last night the wounded lay untended.	Ты сохранил рощу и её светящийся урожай. Сигрун-целительница вдохнула её споры и не поднялась, и в последнюю ночь раненые лежали без помощи.
 You let the dock burn in an older war. The raiders found only black posts and came ashore few and slow, where Torvald Shield-Bearer, whole and unhurt, was waiting. No ship will ever sail from that shore again.	Ты дал причалу сгореть в давней войне. Налётчики нашли лишь чёрные сваи и выбирались на берег редко и медленно, а там их ждал Торвальд Щитоносец, цел и невредим. Ни один корабль больше не отплывёт от того берега.
 You let the dock burn in an older war, so the raiders came few and slow. Torvald Shield-Bearer met them in the surf and did not come back from it.	Ты дал причалу сгореть в давней войне, и налётчики шли редко и медленно. Торвальд Щитоносец встретил их в прибое и не вернулся оттуда.

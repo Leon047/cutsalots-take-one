@@ -574,7 +574,7 @@ void ATSCHUD::BuildIcon(int32 Type, float Cx, float Cy, float S, float Alpha)
 
 void ATSCHUD::DrawBuildBar(ATSCGameMode* GM)
 {
-	static const TCHAR* Names[5] = { TEXT("House"), TEXT("Sawmill"), TEXT("Healer's hut"), TEXT("Hammer shrine"), TEXT("Stag shrine") };
+	static const TCHAR* Names[5] = { TEXT("House"), TEXT("Sawmill"), TEXT("Healer's hut"), TEXT("Hammer blessing"), TEXT("Stag blessing") };
 	static const TCHAR* Tips[5] = {
 		TEXT("Raises the population cap by 3. Two settlers arrive: more workers by day, one more defender at night."),
 		TEXT("+2 wood income. Wood left at nightfall braces the west gate."),

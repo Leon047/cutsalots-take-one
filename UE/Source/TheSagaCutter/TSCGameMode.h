@@ -173,8 +173,8 @@ public:
 	float HallMaxHP = 1.f;
 	bool bGateClosed = false;
 	bool bGateBroken = false;
-	bool bHammerShrine = false;
-	bool bStagShrine = false;
+	bool bHammerBlessing = false;
+	bool bStagBlessing = false;
 
 	UPROPERTY()
 	TArray<TObjectPtr<ATSCUnit>> Units;
@@ -264,7 +264,7 @@ private:
 	ATSCUnit* SpawnUnit(ETSCRole InRole, const FString& Name, const FVector& Loc);
 	/** An animal roaming around Loc (Region: it turns Ashen with that part of the world). */
 	ATSCUnit* SpawnWildlife(ETSCRole InRole, const FVector& Loc, float Radius, int32 Region);
-	/** Deer and wolves in the forest, foxes on its edges, the stag by the stag stone, Hakon's husky. */
+	/** Deer and wolves in the forest, foxes on its edges, the stag in the forest, Hakon's husky. */
 	void SpawnAllWildlife();
 	FVector CellCenter(int32 Cx, int32 Cy) const;
 	FVector CellCorner(int32 Cx, int32 Cy) const;
@@ -363,8 +363,9 @@ private:
 	UPROPERTY() TObjectPtr<ATSCTerrain> Terrain;
 	UPROPERTY() TArray<TObjectPtr<ATSCPrimActor>> Flotsam;
 	bool bProLandingPlayed = false;
-	UPROPERTY() TObjectPtr<ATSCPrimActor> HammerStone;
-	UPROPERTY() TObjectPtr<ATSCPrimActor> StagStone;
+	FVector AltarPos = FVector::ZeroVector; // the stone altar (SM_Altar) in the level: where the villagers pray
+	bool bAltarFound = false;
+	UPROPERTY() TObjectPtr<ATSCPrimActor> AltarGlow; // carries the altar's blessing lights
 
 	// named villagers and event actors
 	UPROPERTY() TObjectPtr<ATSCUnit> Hunter;

@@ -41,14 +41,13 @@ namespace TSC
 		const FLinearColor Red(0.45f, 0.05f, 0.04f);
 	}
 
-	enum class EBuilding : uint8 { House, Sawmill, Healer, HammerShrine, StagShrine };
+	enum class EBuilding : uint8 { House, Sawmill, Healer, HammerBlessing, StagBlessing };
 
 	void BuildGroundTile(ATSCPrimActor* A, const FLinearColor& Living, const FLinearColor& Ashen);
 	void BuildHouse(ATSCPrimActor* A, int32 Seed);
 	void BuildLonghouse(ATSCPrimActor* A);
 	void BuildSawmill(ATSCPrimActor* A);
 	void BuildHealer(ATSCPrimActor* A);
-	void BuildShrine(ATSCPrimActor* A, bool bHammer);
 	void BuildPlotBuilding(ATSCPrimActor* A, EBuilding Type, int32 Seed);
 	/** Crops gets the part indices of the plants, so the boar can trample them. */
 	void BuildGarden(ATSCPrimActor* A, int32 W, int32 H, TArray<int32>& Crops);
@@ -62,7 +61,6 @@ namespace TSC
 	void BuildStump(ATSCPrimActor* A);
 	void BuildRock(ATSCPrimActor* A, int32 Seed);
 	void BuildMushrooms(ATSCPrimActor* A, int32 Seed);
-	void BuildRuneStone(ATSCPrimActor* A, bool bHammer);
 	/** Returns the pivot at the foot of the sail (scale its Z to lower the sail), or null if the ship has none. */
 	USceneComponent* BuildLongship(ATSCPrimActor* A);
 	void BuildPlotMarker(ATSCPrimActor* A, int32 W, int32 H);

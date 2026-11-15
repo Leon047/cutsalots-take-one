@@ -535,28 +535,6 @@ namespace TSC
 		A->AddLight(FVector(CELL * 0.5f, CELL * 2.f + 70.f, 110.f), Pal::Fire, 2.2f, 0.3f, 420.f);
 	}
 
-	void BuildShrine(ATSCPrimActor* A, bool bHammer)
-	{
-		const int32 W = 2, H = 2;
-		const FLinearColor Glow = bHammer ? FLinearColor(10.f, 4.f, 0.5f) : FLinearColor(1.5f, 8.f, 3.5f);
-		for (int32 X = 0; X < W; ++X) { for (int32 Y = 0; Y < H; ++Y) { Floor(A, X, Y, 8.f, Pal::Stone * (0.9f + 0.15f * ((X + Y) % 2))); } }
-		Post(A, 14.f, 14.f, 8.f, CELL * 1.1f, Pal::TimberDark);
-		Post(A, W * CELL - 14.f, 14.f, 8.f, CELL * 1.1f, Pal::TimberDark);
-		Post(A, 14.f, H * CELL - 14.f, 8.f, CELL * 1.1f, Pal::TimberDark);
-		Post(A, W * CELL - 14.f, H * CELL - 14.f, 8.f, CELL * 1.1f, Pal::TimberDark);
-		Wall(A, 0, 0, 0, 8.f, Pal::Timber * 0.8f);
-		Wall(A, 1, 0, 0, 8.f, Pal::Timber * 0.8f);
-		GableRoof(A, W, H, 8.f + CELL * 1.1f, bHammer ? Pal::Red * 0.8f : Pal::Moss, bHammer ? 1 : 4, 42.f);
-		// Altar stone with a glowing sign.
-		A->AddPart(ETSCShape::Cube, FVector(CELL, CELL, 60.f), FRotator::ZeroRotator, FVector(0.7f, 0.5f, 1.1f), Pal::StoneDark);
-		int32 S = A->AddPart(ETSCShape::Cube, FVector(CELL, CELL + 27.f, 78.f), FRotator::ZeroRotator, FVector(0.1f, 0.04f, 0.5f), Pal::Fire);
-		A->SetGlow(S, Glow, Glow * 0.5f);
-		S = A->AddPart(ETSCShape::Cube, FVector(CELL, CELL + 27.f, bHammer ? 96.f : 100.f), FRotator(0.f, 0.f, 0.f),
-			FVector(bHammer ? 0.4f : 0.5f, 0.04f, bHammer ? 0.16f : 0.07f), Pal::Fire);
-		A->SetGlow(S, Glow, Glow * 0.5f);
-		A->AddLight(FVector(CELL, CELL + 90.f, 110.f), bHammer ? Pal::Fire : Pal::Shroom, 4.f, 2.f, 600.f);
-	}
-
 	void BuildPlotBuilding(ATSCPrimActor* A, EBuilding Type, int32 Seed)
 	{
 		A->bStepParts = true;
@@ -565,8 +543,6 @@ namespace TSC
 		case EBuilding::House: BuildHouse(A, Seed); break;
 		case EBuilding::Sawmill: BuildSawmill(A); break;
 		case EBuilding::Healer: BuildHealer(A); break;
-		case EBuilding::HammerShrine: BuildShrine(A, true); break;
-		case EBuilding::StagShrine: BuildShrine(A, false); break;
 		}
 		A->bStepParts = false;
 	}
@@ -875,59 +851,6 @@ namespace TSC
 				FVector(30.f, 30.f, 35.f) * Size, Pal::Shroom);
 			A->SetAshen(Part, Pal::Char * 1.5f);
 			A->SetGlow(Part, FLinearColor(0.65f, 2.45f, 1.3f), FLinearColor::Black);
-		}
-	}
-
-	void BuildRuneStone(ATSCPrimActor* A, bool bHammer)
-	{
-		const FLinearColor Glow = bHammer ? FLinearColor(10.f, 4.f, 0.5f) : FLinearColor(1.5f, 8.f, 3.5f);
-		const FLinearColor Dim = Glow * 0.25f;
-		static UStaticMesh* Foundation = LoadNaturalMesh(TEXT("/Game/Fab/Nordic_Forest_Cluster_Rock_Small/xjijdiz_tier_2/StaticMeshes/xjijdiz_tier_2.xjijdiz_tier_2"));
-		static UStaticMesh* StandingStone = LoadNaturalMesh(TEXT("/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FND_Boulder_C.SM_VH_FND_Boulder_C"));
-		if (Foundation) { AddNaturalProp(A, Foundation, FVector::ZeroVector, FRotator::ZeroRotator, FVector(190.f, 150.f, 32.f), Pal::StoneDark); }
-		if (StandingStone) { AddNaturalProp(A, StandingStone, FVector(0.f, -13.f, 13.f), FRotator::ZeroRotator, FVector(116.f, 59.f, 297.f), Pal::Stone); }
-		const float Y = 25.f;
-		if (bHammer)
-		{
-			int32 S = A->AddPart(ETSCShape::Cube, FVector(0.f, Y, 150.f), FRotator::ZeroRotator, FVector(0.14f, 0.05f, 1.2f), Pal::Fire);
-			A->SetGlow(S, Glow, Dim);
-			S = A->AddPart(ETSCShape::Cube, FVector(0.f, Y + 4.f, 216.f), FRotator::ZeroRotator, FVector(0.62f, 0.05f, 0.3f), Pal::Fire);
-			A->SetGlow(S, Glow, Dim);
-			// Banners and candles.
-			for (int32 I = 0; I < 2; ++I)
-			{
-				const float X = I == 0 ? -150.f : 150.f;
-				Post(A, X, 0.f, 0.f, 340.f, Pal::TimberDark, 0.08f);
-				const int32 B = A->AddPart(ETSCShape::Cube, FVector(X, 8.f, 250.f), FRotator::ZeroRotator, FVector(0.5f, 0.03f, 1.6f), Pal::Red);
-				A->SetVis(B, I == 0 ? ETSCVis::Both : ETSCVis::LivingOnly);
-			}
-			for (int32 I = 0; I < 5; ++I)
-			{
-				const FVector P(-90.f + I * 45.f, 100.f + (I % 2) * 26.f, 0.f);
-				A->AddPart(ETSCShape::Cylinder, P + FVector(0.f, 0.f, 12.f + I % 3 * 4.f), FRotator::ZeroRotator, FVector(0.07f, 0.07f, 0.24f + I % 3 * 0.08f), FLinearColor(0.7f, 0.65f, 0.5f));
-				const int32 F = A->AddPart(ETSCShape::Sphere, P + FVector(0.f, 0.f, 30.f + I % 3 * 8.f), FRotator::ZeroRotator, FVector(0.07f, 0.07f, 0.11f), Pal::Fire);
-				A->SetGlow(F, FLinearColor(14.f, 6.f, 1.f), FLinearColor(3.f, 1.f, 0.1f));
-			}
-			A->AddLight(FVector(0.f, 140.f, 80.f), Pal::Fire, 4.f, 1.2f, 700.f);
-		}
-		else
-		{
-			// Stag sign: a spine and two antlers.
-			int32 S = A->AddPart(ETSCShape::Cube, FVector(0.f, Y, 140.f), FRotator::ZeroRotator, FVector(0.1f, 0.05f, 0.8f), Pal::Shroom);
-			A->SetGlow(S, Glow, Dim);
-			S = A->AddPart(ETSCShape::Cube, FVector(-28.f, Y + 4.f, 205.f), FRotator(-35.f, 0.f, 0.f), FVector(0.09f, 0.05f, 0.75f), Pal::Shroom);
-			A->SetGlow(S, Glow, Dim);
-			S = A->AddPart(ETSCShape::Cube, FVector(28.f, Y + 4.f, 205.f), FRotator(35.f, 0.f, 0.f), FVector(0.09f, 0.05f, 0.75f), Pal::Shroom);
-			A->SetGlow(S, Glow, Dim);
-			// The scanned stump's exposed roots form the base of the stag stone.
-			static UStaticMesh* Roots = LoadNaturalMesh(TEXT("/Game/Fab/Nordic_Forest_Tree_Stump_Birch_Medium/th5hcjjfa_tier_2/StaticMeshes/th5hcjjfa_tier_2.th5hcjjfa_tier_2"));
-			if (Roots)
-			{
-				const int32 Rt = AddNaturalProp(A, Roots, FVector(0.f, 0.f, -6.f), FRotator(0.f, 31.f, 0.f),
-					FVector(186.f, 145.f, 49.f), Pal::TimberDark * 1.4f);
-				A->SetAshen(Rt, Pal::Char);
-			}
-			A->AddLight(FVector(0.f, 120.f, 100.f), Pal::Shroom, 3.5f, 0.6f, 700.f);
 		}
 	}
 
