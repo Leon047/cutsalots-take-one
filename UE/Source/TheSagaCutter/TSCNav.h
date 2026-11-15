@@ -4,8 +4,9 @@
 
 #include "CoreMinimal.h"
 
-/** Nav layers: People (a tree blocks its whole grid cell) and Wildlife (a tree blocks only its trunk). */
-namespace TSCNavLayer { enum Type { People = 0, Wildlife = 1, Num = 2 }; }
+/** Nav layers: People (a tree blocks its whole grid cell), Wildlife (a tree blocks only its trunk) and Hostile
+ *  (raiders and fog-born: People plus the barred gate, which villagers can open and enemies cannot). */
+namespace TSCNavLayer { enum Type { People = 0, Wildlife = 1, Hostile = 2, Num = 3 }; }
 
 /**
  * Fine walkability grid for unit movement: 50 cm nav cells over the coarse game grid plus a margin.
@@ -24,6 +25,7 @@ struct FTSCNavGrid
 	// ----- sources (each marks the grid dirty; the masks are baked lazily on the next query) -----
 	void SetCoarse(int32 Cx, int32 Cy, bool bBlock);              // grid cell coords, may lie in the margin; also clears the tree flag
 	void SetTree(int32 Cx, int32 Cy, const FVector& TrunkPos);    // call after SetCoarse(Cx, Cy, true)
+	void SetGateBar(int32 Cx, int32 Cy, bool bBar);               // a barred gate cell blocks only the Hostile layer
 	int32 AddPropBox(const FVector2D& Center, const FVector2D& AxisX, const FVector2D& HalfExtent);  // oriented box; AxisX unit length
 	int32 AddPropDisc(const FVector2D& Center, float Radius);
 	void SetPropEnabled(int32 Idx, bool bEnabled);
@@ -77,6 +79,7 @@ private:
 
 	TArray<uint8> Coarse;
 	TArray<uint8> TreeFlag;
+	TArray<uint8> GateBar;
 	TArray<FVector2D> TreePos;
 	TArray<FProp> Props;
 	bool bPropsActive = true;

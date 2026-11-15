@@ -23,7 +23,8 @@ enum class ETSCRole : uint8 { Worker, Hunter, Woodcutter, Healer, Shield, Creatu
 enum class ETSCJob : uint8 { Idle, Wood, Food };
 enum class ETSCNeed : uint8 { None, Wood, Leaf, Heal };
 /** Wander: roam around HoldPos (graze, rest, move on). Follow: keep near Leader (the hunter's dog). */
-enum class ETSCOrder : uint8 { Work, Hold, Shelter, Leave, Assault, Wander, Follow };
+/** Patrol: the named heroes walk a closed loop of waypoints round the settlement (no work, no gathering). */
+enum class ETSCOrder : uint8 { Work, Hold, Shelter, Leave, Assault, Wander, Follow, Patrol };
 enum class ETSCStructure : uint8 { None, Gate, Longhouse };
 /** Wildlife confinement relative to the palisade: Outside = forest animals (never cross the wall inwards), Inside = livestock (never leave). */
 enum class ETSCZone : uint8 { Free, Outside, Inside };
@@ -67,6 +68,8 @@ public:
 	void OrderShelter(const FVector& Pos);
 	void OrderLeave(const FVector& Pos);
 	void OrderAssault();
+	/** Walk the closed loop Route over and over (starting at its nearest waypoint), pausing at every other corner to look around. */
+	void OrderPatrol(const TArray<FVector>& Route);
 	/** Wildlife: roam within Radius of Center. */
 	void OrderWander(const FVector& Center, float Radius);
 	/** Wildlife: stay close behind InLeader (falls back to wandering where it stood if the leader is gone). */
@@ -75,6 +78,8 @@ public:
 	void Teleport(const FVector& Pos);
 	FVector Loc2D() const { FVector L = GetActorLocation(); L.Z = 0.f; return L; }
 	bool AtHoldPos() const;
+	/** The husky has run up: this hero stops, turns to it and crouches to scratch it for Duration seconds. False if he is busy (not patrolling, fighting) or the dog is too far. */
+	bool BeginPet(const FVector& DogPos, float Duration);
 	/** Scripted figures that are not simulated: only the idle animation. */
 	void Idle(float Dt);
 
@@ -165,6 +170,9 @@ private:
 	float PlayTimer = 0.f;
 	float PlayCooldown = 0.f;
 	float PlayAngle = 0.f;
+	/** Hakon's husky being scratched: seconds left and where it stands in front of him. */
+	float PetTimer = 0.f;
+	FVector PetSpot = FVector::ZeroVector;
 	/** True if P is on the side of the palisade this animal is allowed on. */
 	bool ZoneAllows(const FVector& P) const;
 	/** A random wander goal around HoldPos that Zone allows (falls back to the current spot). */
@@ -174,6 +182,11 @@ private:
 	FVector FleeFrom = FVector::ZeroVector;
 	/** Walking speed from Init (fleeing and following change Speed temporarily). */
 	float BaseSpeed = 190.f;
+	/** Patrol order: the loop, the waypoint being walked to, the pause at a corner and the time spent on this leg (skips an unreachable one). */
+	TArray<FVector> PatrolRoute;
+	int32 PatrolIdx = 0;
+	float PatrolPause = 0.f;
+	float PatrolLegTime = 0.f;
 	FVector WorkA = FVector::ZeroVector;
 	FVector WorkB = FVector::ZeroVector;
 	FVector HoldPos = FVector::ZeroVector;
@@ -186,7 +199,10 @@ private:
 	int32 PathVersion = -1;
 	/** Body radius against other units (cm). */
 	float NavRadius = 28.f;
-	int32 NavLayer() const { return IsWildlife() ? TSCNavLayer::Wildlife : TSCNavLayer::People; }
+	int32 NavLayer() const
+	{
+		return IsWildlife() ? TSCNavLayer::Wildlife : (Team == ETSCTeam::Creature || Team == ETSCTeam::Raider) ? TSCNavLayer::Hostile : TSCNavLayer::People;
+	}
 	/** Moves by Delta (2D) on the nav grid: slides along obstacles, never enters a blocked cell, respects Zone. Returns the distance moved. */
 	float MoveNav(const FVector& Delta, float WallRadius);
 	/** A push from the crowd (unit separation); same rules as MoveNav. */
@@ -203,6 +219,9 @@ private:
 	/** Dev check (tsc.NavCheck): was inside a blocked nav cell at the last check. */
 	bool bNavWasBlocked = true;
 
+	/** Worker self-defence by day: seconds the weapons stay out and the pause between enemy checks. */
+	float SelfDefenseHold = 0.f;
+	float SelfDefenseThink = 0.f;
 	float AttackTimer = 0.f;
 	float SwingTimer = 0.f;
 	float AnimPhase = 0.f;
@@ -245,6 +264,15 @@ private:
 	/** Bow or staff: always in hand. Arrows start from it. */
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> HeldItem;
+	/** Workers: split logs / an armful of vegetables held in front of the chest while the carry clip plays (hidden otherwise). */
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> CargoLogsComp;
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> CargoVegComp;
+	/** Mesh held in front of the chest, scaled to SizeFrac of the figure height. Null if the mesh is missing. */
+	UStaticMeshComponent* AddCargo(TArrayView<const TCHAR* const> Paths, float SizeFrac);
+	/** Shows the work axe while chopping and the cargo while carrying. */
+	void UpdateHeld();
 	/** Arrow pool, parallel to Arrows. */
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> ArrowComps;

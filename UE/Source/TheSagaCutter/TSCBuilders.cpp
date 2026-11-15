@@ -899,17 +899,15 @@ namespace TSC
 		}
 	}
 
-	USceneComponent* BuildLongship(ATSCPrimActor* A)
+	USceneComponent* BuildLongship(ATSCPrimActor* A, float ShipLength, float ShipYaw)
 	{
-		// The imported drakkar (Content/Drakar). Its own materials are kept. Tuning: ShipLength is stem to stern in cm,
-		// ShipYaw turns it if the bow points the wrong way (it must point east, +X); the long axis is found automatically.
+		// The imported drakkar (Content/Drakar), for the villagers' longship and the raiders' boat alike. Its own materials are kept.
+		// ShipLength is stem to stern in cm, ShipYaw turns it (the bow points east, +X, at 0); the long axis is found automatically.
 		// (Not cached while null: a failed first load must not stick for the whole session.)
 		static UStaticMesh* Ship = nullptr;
 		if (!Ship) { Ship = LoadNaturalMesh(TEXT("/Game/Drakar/Viking_Ship.Viking_Ship")); }
 		if (Ship)
 		{
-			constexpr float ShipLength = 720.f;
-			constexpr float ShipYaw = 0.f;
 			const FBoxSphereBounds B = Ship->GetBounds();
 			const FVector Size = B.BoxExtent * 2.0;
 			const float Scale = ShipLength / (float)FMath::Max3(Size.X, Size.Y, 1.0);
@@ -955,14 +953,6 @@ namespace TSC
 		// No primitive stand-in: the old drakkar must never come back. A missing asset is an error (see DirectoriesToAlwaysCook).
 		UE_LOG(LogTemp, Error, TEXT("[Saga] /Game/Drakar/Viking_Ship could not be loaded: the longship is missing"));
 		return nullptr;
-	}
-
-	void BuildRaiderBoat(ATSCPrimActor* A)
-	{
-		A->AddPart(ETSCShape::Cube, FVector(0.f, 0.f, 22.f), FRotator::ZeroRotator, FVector(3.4f, 0.9f, 0.44f), Pal::Char * 2.f);
-		A->AddPart(ETSCShape::Cone, FVector(-200.f, 0.f, 60.f), FRotator(55.f, 0.f, 0.f), FVector(0.7f, 0.5f, 1.5f), Pal::Char * 2.f);
-		A->AddPart(ETSCShape::Cylinder, FVector(0.f, 0.f, 170.f), FRotator::ZeroRotator, FVector(0.12f, 0.12f, 2.7f), Pal::TimberDark);
-		A->AddPart(ETSCShape::Cube, FVector(0.f, 0.f, 210.f), FRotator::ZeroRotator, FVector(2.2f, 0.04f, 1.6f), FLinearColor(0.3f, 0.03f, 0.03f));
 	}
 
 	void BuildBarrel(ATSCPrimActor* A)

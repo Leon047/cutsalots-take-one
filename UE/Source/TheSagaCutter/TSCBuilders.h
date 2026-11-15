@@ -64,11 +64,10 @@ namespace TSC
 	void BuildRock(ATSCPrimActor* A, int32 Seed);
 	void BuildMushrooms(ATSCPrimActor* A, int32 Seed);
 	/** Returns the pivot at the foot of the sail (scale its Z to lower the sail), or null if the ship has none. */
-	USceneComponent* BuildLongship(ATSCPrimActor* A);
+	USceneComponent* BuildLongship(ATSCPrimActor* A, float ShipLength = 720.f, float ShipYaw = 0.f);
 	void BuildPlotMarker(ATSCPrimActor* A, int32 W, int32 H);
 	void BuildLogPile(ATSCPrimActor* A);
 	void BuildTorch(ATSCPrimActor* A);
-	void BuildRaiderBoat(ATSCPrimActor* A);
 	/** A barrel on its side (axis along local X), half in the water. Living only. */
 	void BuildBarrel(ATSCPrimActor* A);
 	/** Two or three charred planks (long axis local X) with a faint ember glow. Ashen only. */
