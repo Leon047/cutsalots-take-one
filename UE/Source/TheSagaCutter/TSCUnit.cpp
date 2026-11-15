@@ -46,6 +46,33 @@ namespace
 	const FVikingModel AxolotlBird{ TEXT("/Game/Characters/axolotl_bird"), TEXT("Axolotl_Bird"), TEXT("Axolotl_BirdCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
 	const FVikingModel AxolotlAmphibian{ TEXT("/Game/Characters/axolotl_amphibian"), TEXT("Axolotl_Amphibian"), TEXT("Axolotl_AmphibianCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
 
+	/**
+	 * Shuffle bag for picking a model variant: random order, every variant once before any repeats, and the first pick
+	 * of a refilled bag is never the last pick of the previous one. So units spawned together look different.
+	 */
+	struct FTSCVariantBag
+	{
+		TArray<int32> Order;
+		int32 Last = INDEX_NONE;
+
+		int32 Next(int32 Num)
+		{
+			if (Num <= 1) { return 0; }
+			if (Order.IsEmpty() || Order.ContainsByPredicate([Num](int32 V) { return V >= Num; }))
+			{
+				Order.Reset(Num);
+				for (int32 I = 0; I < Num; ++I) { Order.Add(I); }
+				for (int32 I = Num - 1; I > 0; --I) { Order.Swap(I, FMath::RandRange(0, I)); }
+				// Picks pop from the back: keep the previous pick away from the front of the new round.
+				if (Order.Last() == Last) { Order.Swap(Num - 1, FMath::RandRange(0, Num - 2)); }
+			}
+			Last = Order.Pop(EAllowShrinking::No);
+			return Last;
+		}
+	};
+	FTSCVariantBag RaiderBag;
+	FTSCVariantBag CreatureBag;
+
 	const TCHAR* VikingAnimNames[] = { TEXT("Idle"), TEXT("Walk"), TEXT("Run"), TEXT("Walk_Carry"), TEXT("Run_Carry"),
 		TEXT("SwordSlash"), TEXT("Shoot_OneHanded"), TEXT("Punch"), TEXT("PickUp"), TEXT("RecieveHit"), TEXT("Death") };
 	static_assert(UE_ARRAY_COUNT(VikingAnimNames) == (int32)ETSCAnim::Num, "One clip name per ETSCAnim");
@@ -367,11 +394,18 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 	}
 	else if (Role == ETSCRole::Raider)
 	{
-		// Raiders are one of three masked variants, picked at random; a missing mesh falls back to the Vikings below.
+		// Raiders are one of three masked variants from a shuffle bag (random, but different ones in a row); a missing mesh
+		// tries the next variant, and only with none present do the Vikings below take over.
 		const FVikingModel* Variants[] = { &AxolotlFrog, &AxolotlBird, &AxolotlAmphibian };
-		Preferred = Variants[FMath::RandRange(0, 2)];
+		const int32 Start = RaiderBag.Next(UE_ARRAY_COUNT(Variants));
+		for (int32 K = 0; K < UE_ARRAY_COUNT(Variants) && !SkMesh; ++K)
+		{
+			const FVikingModel* V = Variants[(Start + K) % UE_ARRAY_COUNT(Variants)];
+			SkMesh = LoadMesh(*V);
+			if (SkMesh) { Model = V; }
+		}
 	}
-	if (Preferred)
+	if (Preferred && !SkMesh)
 	{
 		SkMesh = LoadMesh(*Preferred);
 		if (SkMesh) { Model = Preferred; }
@@ -471,11 +505,12 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 
 bool ATSCUnit::BuildAnimal()
 {
-	// Entries of this role; with several (the mushrooms) start at a random one and take the first whose mesh exists.
+	// Entries of this role; with several (the mushrooms) start at one from a shuffle bag (random, but different ones in a
+	// row) and take the first whose mesh exists.
 	TArray<const FTSCAnimalModel*> Candidates;
 	for (const FTSCAnimalModel& M : AnimalModels) { if (M.Role == Role) { Candidates.Add(&M); } }
 	if (Candidates.IsEmpty()) { return false; }
-	const int32 Start = Candidates.Num() > 1 ? FMath::RandRange(0, Candidates.Num() - 1) : 0;
+	const int32 Start = Candidates.Num() > 1 ? CreatureBag.Next(Candidates.Num()) : 0;
 	const FTSCAnimalModel* Model = nullptr;
 	FString Folder;
 	USkeletalMesh* SkMesh = nullptr;
