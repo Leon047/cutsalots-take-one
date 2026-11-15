@@ -156,6 +156,11 @@ private:
 	TObjectPtr<ATSCGameMode> GM;
 
 	TWeakObjectPtr<ATSCUnit> Target;
+	/** Scripted prey: while it lives, this unit attacks only it (the spruce-scene fog-born go for Hakon alone). */
+	TWeakObjectPtr<ATSCUnit> Quarry;
+	/** Mourning: seconds left standing still, facing MournAt, before the unit goes back to its order (Hakon's fall). */
+	float MournTimer = 0.f;
+	FVector MournAt = FVector::ZeroVector;
 	/** Follow order: the unit to trail (the husky follows Hakon). */
 	TWeakObjectPtr<ATSCUnit> Leader;
 	/** Wander order: roaming radius around HoldPos, current goal and the pause before moving on. */

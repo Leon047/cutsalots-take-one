@@ -1236,6 +1236,7 @@ void ATSCUnit::Kill()
 
 ATSCUnit* ATSCUnit::FindTarget() const
 {
+	if (ATSCUnit* Q = Quarry.Get()) { return Q->IsTargetable() ? Q : nullptr; }
 	ATSCUnit* Best = nullptr;
 	float BestD = AggroRange;
 	const FVector Me = GetActorLocation();
@@ -1248,6 +1249,7 @@ ATSCUnit* ATSCUnit::FindTarget() const
 		const bool bEnemy = Role == ETSCRole::Husky ? (U->Team == ETSCTeam::Creature || U->Team == ETSCTeam::Raider)
 			: (Team == ETSCTeam::Villager) != (U->Team == ETSCTeam::Villager);
 		if (!bEnemy) { continue; }
+		if (U->Order == ETSCOrder::Leave) { continue; } // nobody chases an enemy that is already running off
 		const float D = FVector::Dist2D(Me, U->GetActorLocation());
 		const bool bThreatensMaster = Master && Master->IsAlive() && FVector::Dist2D(Master->GetActorLocation(), U->GetActorLocation()) < GuardRadius;
 		// On a leash: a pet with a living master only goes for enemies close to him. Once they run past GuardRadius it lets them go
@@ -1531,6 +1533,16 @@ void ATSCUnit::Sim(float Dt)
 	}
 
 	bDogGrowled = false;
+
+	// ----- mourning: stop, turn toward the fallen, stand a moment, then back to the order -----
+	if (MournTimer > 0.f && Order != ETSCOrder::Leave && Order != ETSCOrder::Shelter)
+	{
+		MournTimer -= Dt;
+		const FRotator Face = (MournAt - Loc2D()).Rotation();
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Face.Yaw, 0.f), Dt, 4.f));
+		Animate(Dt, false);
+		return;
+	}
 
 	// ----- orders -----
 	switch (Order)

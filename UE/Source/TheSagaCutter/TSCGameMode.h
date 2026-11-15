@@ -117,7 +117,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Saga")
 	float DayLength = 135.f;
 	UPROPERTY(EditAnywhere, Category = "Saga")
-	float NightLength = 85.f;
+	float NightLength = 105.f;
 	/** Seconds between economy ticks. */
 	UPROPERTY(EditAnywhere, Category = "Saga")
 	float EconomyInterval = 5.f;
@@ -306,6 +306,8 @@ private:
 	void SetGate(bool bClosed);
 	/** Bars or frees the two gate cells for the enemy nav layer only. */
 	void SetGateCells(bool bBar);
+	/** Blocks the cells under the fallen gate spruce, or frees exactly those again. */
+	void SetSpruceFallen(bool bFallen);
 	void ShowBanner(const FString& Text, float Time);
 	void AutoPlay(float Dt);
 	/** Cross-fades to Sound; does nothing if it is already the current track. */
@@ -389,6 +391,7 @@ private:
 	TArray<USceneComponent*> GateLeaves;
 	float GateOpenAlpha = 1.f;
 	UPROPERTY() TObjectPtr<ATSCPrimActor> EventTree;
+	TArray<FIntPoint> SpruceCells;
 	UPROPERTY() TObjectPtr<ATSCPrimActor> Garden;
 	TArray<int32> CropParts;
 	UPROPERTY() TObjectPtr<ATSCPrimActor> DockActor;
@@ -428,8 +431,8 @@ private:
 	// economy modifiers set by the scenes
 	float ForestMul = 1.f;
 	float GardenMul = 1.f;
-	float GroveBonus = 2.f;
-	float DockBonus = 2.f;
+	float GroveBonus = 3.f;
+	float DockBonus = 3.f;
 	float DayFoodMul = 1.f;
 	int32 ExtraSawmills = 0;
 	int32 ExtraHealers = 0;
@@ -444,6 +447,8 @@ private:
 	bool bWestBreached = false;
 	bool bEastBreached = false;
 	int32 EnemiesSlain = 0;
+	int32 CreatureWaves[3] = { 3, 3, 4 };
+	int32 RaiderWaves[2] = { 3, 3 };
 	TArray<FString> BuiltNames;
 
 	float EconomyTimer = 0.f;

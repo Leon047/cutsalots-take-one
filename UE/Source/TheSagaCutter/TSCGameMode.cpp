@@ -47,6 +47,9 @@ namespace
 {
 	const int32 GateX = 8, GateY = 11;          // gate cells (8,11) and (8,12)
 	const int32 TreeX = 9, TreeY = 10;          // the spruce by the gate
+	const int32 TreeFall = 5;                   // cells south of it that the fallen trunk covers (the gateway and beyond)
+	const FVector2D SprucePos(8.7f, 10.3f);     // the spruce itself stands right inside the north gate post (cell units, see CellF)
+	const FVector2D UlfChop(9.45f, 9.5f);       // where Ulf stands to fell it: north-east of the trunk, clear of its fall
 	const FIntRect ForestRect(-6, -4, 8, 28);   // max exclusive
 	const FIntRect GardenRect(15, 14, 21, 19);
 	const FIntRect GroveRect(10, 19, 21, 27);
@@ -227,6 +230,20 @@ void ATSCGameMode::SetBlocked(int32 Cx, int32 Cy, bool bBlock)
 	if (InGrid(Cx, Cy)) { Blocked[Cy * GW + Cx] = bBlock ? 1 : 0; }
 	Nav.SetCoarse(Cx, Cy, bBlock); // also the margin outside the grid (forest edge trees, wall arcs)
 	++GridVersion;
+}
+
+void ATSCGameMode::SetSpruceFallen(bool bFallen)
+{
+	// Only the cells the trunk and crown took are freed again: the palisade and a house lie next to them.
+	if (!bFallen)
+	{
+		for (const FIntPoint& C : SpruceCells) { SetBlocked(C.X, C.Y, false); }
+		SpruceCells.Reset();
+		return;
+	}
+	auto Take = [this](int32 X, int32 Y) { if (!IsBlocked(X, Y)) { SetBlocked(X, Y, true); SpruceCells.Add(FIntPoint(X, Y)); } };
+	for (int32 Y = TreeY + 1; Y <= TreeY + TreeFall; ++Y) { Take(TreeX, Y); }
+	for (int32 Y = TreeY + 3; Y < TreeY + TreeFall; ++Y) { Take(TreeX + 1, Y); } // the crown leans one column into the village
 }
 
 void ATSCGameMode::BlockRect(int32 Cx, int32 Cy, int32 W, int32 H, bool bBlock)
@@ -658,18 +675,26 @@ void ATSCGameMode::BuildWorld()
 	ProDressing.Add(Gate);
 
 	// the spruce by the gate: a separate stump stands in for its Ashen version
-	EventTree = SpawnPrim(CellCenter(TreeX, TreeY), TSCRegion::Forest);
+	EventTree = SpawnPrim(CellF(SprucePos.X, SprucePos.Y), TSCRegion::Forest);
 	BuildTree(EventTree, 4242, false);
-	EventTree->SetActorScale3D(FVector(1.25f, 1.25f, 1.32f));
 	EventTree->SetActorRotation(FRotator::ZeroRotator);
+	EventTree->SetActorScale3D(FVector::OneVector);
 	EventTree->Refresh();
 	{
-		ATSCPrimActor* Stump = SpawnPrim(CellCenter(TreeX, TreeY), TSCRegion::Forest);
+		// The old giant of the forest, big enough to bar the gate: about 9.5 m tall (a pine variant can be as short as ~3 m at
+		// scale 1), with a crown to match. Sized from the mesh so a different variant does not shrink it again.
+		const float H = FMath::Max(EventTree->GetComponentsBoundingBox(true).GetSize().Z, 100.f);
+		const float Z = 950.f / H;
+		EventTree->SetActorScale3D(FVector(Z * 0.8f, Z * 0.8f, Z));
+	}
+	{
+		ATSCPrimActor* Stump = SpawnPrim(CellF(SprucePos.X, SprucePos.Y), TSCRegion::Forest);
 		BuildStump(Stump);
+		Stump->SetActorScale3D(FVector(1.6f)); // the burnt stump of that giant
 		Stump->Refresh();
 	}
 	SetBlocked(TreeX, TreeY, true);
-	Nav.SetTree(TreeX, TreeY, CellCenter(TreeX, TreeY));
+	Nav.SetTree(TreeX, TreeY, CellCenter(TreeX, TreeY)); // keeps the whole cell blocked; the trunk itself stands in the wall cell beside it
 
 	// ----- constructions -----
 	TArray<FBox2D> GroundExclusions;
@@ -972,7 +997,7 @@ void ATSCGameMode::BakeNavProps()
 {
 	// Points the scene scripts and orders walk to: a prop must never cut them off.
 	const FVector KeyPoints[] = {
-		HallDoor(), CellF(10.4f, 10.5f), CellF(14.4f, 20.3f), CellF(18.f, 14.6f), CellF(17.f, 14.4f), CellF(9.9f, 12.f),
+		HallDoor(), CellF(UlfChop.X, UlfChop.Y), CellF(14.4f, 20.3f), CellF(18.f, 14.6f), CellF(17.f, 14.4f), CellF(9.9f, 12.f),
 		CellF(7.5f, 12.f), CellF(3.5f, 12.f), CellF(0.5f, 12.f), CellF(26.4f, 12.f), CellF(31.5f, 12.f)
 	};
 	constexpr int32 NumKeys = UE_ARRAY_COUNT(KeyPoints);
@@ -1782,7 +1807,7 @@ void ATSCGameMode::StartDay(int32 InDay)
 			bPendingTimber = false;
 			Wood += 40.f;
 			EventTree->SetActorHiddenInGame(true);
-			BlockRect(TreeX, TreeY, 1, 3, false);
+			SetBlocked(TreeX, TreeY, false); SetSpruceFallen(false);
 			OrderPatrolRoute(Hunter);
 			Toast(TEXT("At dawn the fallen spruce is sawn up and the gate is cleared: +40 wood."));
 		}
@@ -1814,7 +1839,7 @@ void ATSCGameMode::SimDay(float Dt)
 		if (Day == 1)
 		{
 			if (Once(0, 24.f)) { StartScene(0); }
-			if (Once(1, 62.f) && Woodcutter->IsAlive()) { Woodcutter->OrderHold(CellF(10.4f, 10.5f)); }
+			if (Once(1, 62.f) && Woodcutter->IsAlive()) { Woodcutter->OrderHold(CellF(UlfChop.X, UlfChop.Y)); }
 			if (Once(2, 74.f)) { StartScene(1); }
 		}
 		else if (Day == 2)
@@ -1829,7 +1854,7 @@ void ATSCGameMode::SimDay(float Dt)
 	}
 
 	SimConstruction(Dt);
-	EconomyTimer += Dt;
+	if (ActiveScene < 0) { EconomyTimer += Dt; }
 	if (EconomyTimer >= EconomyInterval)
 	{
 		EconomyTimer -= EconomyInterval;
@@ -1850,7 +1875,7 @@ void ATSCGameMode::ComputeRates(float& OutWood, float& OutFood) const
 	int32 Living = 0;
 	for (const ATSCUnit* U : Units) { if (U && U->Team == ETSCTeam::Villager && U->IsAlive()) { ++Living; } }
 	OutWood = NumWood * 1.f * ForestMul + 1.f + ExtraSawmills * 2.f + (Woodcutter && Woodcutter->IsAlive() ? 1.f : 0.f);
-	OutFood = (NumFood * 1.5f * GardenMul + GroveBonus + DockBonus + (Hunter && Hunter->IsAlive() ? 2.f : 0.f) + (bStagBlessing ? 2.f : 0.f)) * DayFoodMul - Living * 0.5f;
+	OutFood = (NumFood * 1.5f * GardenMul + GroveBonus + DockBonus + (Hunter && Hunter->IsAlive() ? 2.f : 0.f) + (bStagBlessing ? 2.f : 0.f)) * DayFoodMul - Living * 0.6f;
 }
 
 void ATSCGameMode::EconomyTick()
@@ -2062,9 +2087,9 @@ void ATSCGameMode::DefineScenes()
 		S.Region = TSCRegion::Garden;
 		S.Alert = TEXT("A boar has broken out of the forest and is charging the vegetable garden!");
 		S.LivingName = TEXT("LIVING SAGA - Wooden fence");
-		S.LivingText = TEXT("Lose 25 food to the boar and halve today's harvest. Keep the fertile soil.");
+		S.LivingText = TEXT("Lose 30 food and half of today's harvest. The soil stays rich, but the longhouse gets no wall.");
 		S.AshenName = TEXT("ASHEN SAGA - Stone wall");
-		S.AshenText = TEXT("The wall saves the crops. Garden yields drop 25% for the rest of the saga.");
+		S.AshenText = TEXT("The wall saves the crops and shields the longhouse on the final night (+120 hall strength). Garden yields drop 40% for good.");
 	}
 	{
 		FTSCScene& S = Scenes[1];
@@ -2072,9 +2097,9 @@ void ATSCGameMode::DefineScenes()
 		S.Region = TSCRegion::Forest;
 		S.Alert = TEXT("The spruce has fallen across the west gate! Hakon the hunter is trapped outside, and the fog is moving.");
 		S.LivingName = TEXT("THE LIVING SAGA - The fallen spruce");
-		S.LivingText = TEXT("Hakon stands alone against the fog-born and will not live to see the gate cleared. At dawn the spruce is sawn up: +40 wood, and the forest keeps giving timber.");
+		S.LivingText = TEXT("Hakon dies alone outside the gate, and the fog-born that kill him learn the way: three more come in every wave on the final night. The spruce is sawn up at dawn (+40 wood) and the forest keeps giving timber.");
 		S.AshenName = TEXT("THE ASHEN SAGA - The burnt stump");
-		S.AshenText = TEXT("Here the forest burned years ago. No spruce stood by the gate, so nothing blocks it and Hakon walks home. But scorched stumps give no timber: no +40 wood, and wood from the forest falls by 40% for good.");
+		S.AshenText = TEXT("Here the forest burned years ago. No spruce bars the gate, Hakon walks home, and his bow guards the west gate on the final night. But scorched stumps give no timber: no +40 wood, and forest wood is halved for good.");
 	}
 	{
 		FTSCScene& S = Scenes[2];
@@ -2082,9 +2107,9 @@ void ATSCGameMode::DefineScenes()
 		S.Region = TSCRegion::Grove;
 		S.Alert = TEXT("Sigrun the healer has breathed the grove's spores and fallen! No one else can tend the wounded.");
 		S.LivingName = TEXT("THE LIVING SAGA - The glowing grove");
-		S.LivingText = TEXT("The spores take Sigrun before nightfall. The grove keeps feeding the village (+2 food income), but no healer will tend your defenders on the final night.");
+		S.LivingText = TEXT("The spores take Sigrun before nightfall. On the final night no one heals your defenders unless you build a healer's hut. The grove keeps feeding the village (+3 food income).");
 		S.AshenName = TEXT("THE ASHEN SAGA - The dead roots");
-		S.AshenText = TEXT("Here the grove burned in the old war and nothing grows that could harm her. Sigrun lives. But the glowing mushrooms are gone (-2 food income) and the Stag's blessing is weakened.");
+		S.AshenText = TEXT("Here the grove burned in the old war and nothing grows that could harm her. Sigrun lives and heals your defenders through the final night. But the glowing mushrooms are gone (-3 food income) and the Stag's blessing is weakened.");
 	}
 	{
 		FTSCScene& S = Scenes[3];
@@ -2092,9 +2117,9 @@ void ATSCGameMode::DefineScenes()
 		S.Region = TSCRegion::Dock;
 		S.Alert = TEXT("A scout boat has made fast to the dock! Torvald the shield-bearer runs to meet the raiders alone.");
 		S.LivingName = TEXT("THE LIVING SAGA - The timber dock");
-		S.LivingText = TEXT("Torvald drives the scouts off but is badly wounded, and they carry away the stores (-30 food). The dock stands: fishing goes on (+2 food income), and tonight the raiders land in force.");
+		S.LivingText = TEXT("Torvald drives the scouts off but is badly wounded, and they carry away the stores (-30 food). Tonight six raiders land at the dock. The dock stands and the fishing goes on (+3 food income).");
 		S.AshenName = TEXT("THE ASHEN SAGA - The charred posts");
-		S.AshenText = TEXT("Here the dock burned with the fleet. The scouts find nowhere to land and row away; Torvald is unhurt and tonight fewer raiders struggle ashore. But the longship is a wreck and the fishing is gone (-2 food income).");
+		S.AshenText = TEXT("Here the dock burned with the fleet. The scouts row away, Torvald is unhurt, and tonight only three raiders wade ashore, slow in the surf. But the longship is a wreck and the fishing is gone (-3 food income).");
 	}
 }
 
@@ -2117,7 +2142,7 @@ void ATSCGameMode::StartScene(int32 Idx)
 	}
 	else if (Idx == 1)
 	{
-		if (Woodcutter->IsAlive()) { Woodcutter->OrderHold(CellF(10.4f, 10.5f)); }
+		if (Woodcutter->IsAlive()) { Woodcutter->OrderHold(CellF(UlfChop.X, UlfChop.Y)); }
 		if (Hunter->IsAlive()) { Hunter->OrderHold(CellF(3.5f, 12.f)); }
 		UpdateJobs(); // call the woodcutters in from the forest
 		ShowBanner(TEXT("Ulf the woodcutter sets his axe to the old spruce beside the west gate..."), 20.f);
@@ -2153,7 +2178,7 @@ void ATSCGameMode::SimScene(int32 Idx, float Dt)
 			const bool bThere = !Woodcutter->IsAlive() || Woodcutter->AtHoldPos();
 			if (bThere || S.Timer > 14.f)
 			{
-				if (Woodcutter->IsAlive()) { Woodcutter->Teleport(CellF(10.4f, 10.5f)); Woodcutter->OrderWork(CellF(10.4f, 10.5f), CellF(10.4f, 10.5f)); Woodcutter->SetActorRotation(FRotator(0.f, 180.f, 0.f)); }
+				if (Woodcutter->IsAlive()) { Woodcutter->Teleport(CellF(UlfChop.X, UlfChop.Y)); Woodcutter->OrderWork(CellF(UlfChop.X, UlfChop.Y), CellF(UlfChop.X, UlfChop.Y)); Woodcutter->SetActorRotation(FRotator(0.f, (CellF(SprucePos.X, SprucePos.Y) - CellF(UlfChop.X, UlfChop.Y)).Rotation().Yaw, 0.f)); }
 				S.Step = 1;
 				S.Timer = 0.f;
 			}
@@ -2165,13 +2190,14 @@ void ATSCGameMode::SimScene(int32 Idx, float Dt)
 		}
 		else if (S.Step == 2)
 		{
-			// the spruce falls south, across the gateway
+			// the spruce falls south across the gateway, angled a little into the village so the palisade does not hide it
 			const float A = FMath::Clamp(S.Timer / 1.3f, 0.f, 1.f);
 			const float Ang = A * A * HALF_PI * 0.985f;
-			EventTree->SetActorRotation(FQuat::FindBetweenNormals(FVector::UpVector, FVector(0.f, FMath::Sin(Ang), FMath::Cos(Ang))));
+			const FVector FallDir = FVector(0.16f, 1.f, 0.f).GetSafeNormal();
+			EventTree->SetActorRotation(FQuat::FindBetweenNormals(FVector::UpVector, FallDir * FMath::Sin(Ang) + FVector::UpVector * FMath::Cos(Ang)));
 			if (A >= 1.f)
 			{
-				BlockRect(TreeX, TreeY + 1, 1, 2, true);
+				SetSpruceFallen(true);
 				if (Woodcutter->IsAlive()) { Woodcutter->OrderHold(CellF(10.6f, 10.5f)); }
 				if (Hunter->IsAlive())
 				{
@@ -2181,8 +2207,13 @@ void ATSCGameMode::SimScene(int32 Idx, float Dt)
 				for (int32 I = 0; I < 6; ++I)
 				{
 					ATSCUnit* C = SpawnUnit(ETSCRole::Creature, FString(), CellF(-3.f - (I / 3) * 1.5f, 10.4f + (I % 3) * 1.1f));
-					C->MaxHP = C->HP = 62.f;
-					C->AggroRange = 2600.f;
+					C->MaxHP = C->HP = 75.f;
+					C->AggroRange = 450.f;
+					C->bFights = false;   // they walk past the forest workers and only fight once at Hakon (see Step 3)
+					// Hakon cannot win this fight: the fog-born go for him alone, and no blade (his, the woodcutters', the husky's)
+					// can bring them down by day, so he falls in the fight instead of dropping dead when the scene times out.
+					C->Quarry = Hunter;
+					C->bInvulnerable = true;
 					C->OrderHold(CellF(6.6f, 11.4f + (I % 3) * 0.5f));
 					EventUnits.Add(C);
 				}
@@ -2195,9 +2226,8 @@ void ATSCGameMode::SimScene(int32 Idx, float Dt)
 		}
 		else if (S.Step == 3)
 		{
-			int32 Alive = 0;
-			for (ATSCUnit* C : EventUnits) { if (C && C->IsAlive()) { ++Alive; } }
-			if (!Hunter->IsAlive() || Alive == 0 || S.Timer > 80.f) { ResolveLiving(Idx); }
+			for (ATSCUnit* C : EventUnits) { if (C && C->IsAlive() && !C->bFights && C->AtHoldPos()) { C->bFights = true; } }
+			if (!Hunter->IsAlive() || S.Timer > 45.f) { ResolveLiving(Idx); }
 		}
 	}
 	else if (Idx == 2)
@@ -2256,26 +2286,30 @@ void ATSCGameMode::ResolveLiving(int32 Idx)
 	FTSCScene& S = Scenes[Idx];
 	if (Idx == 0)
 	{
-		Food = FMath::Max(0.f, Food - 25.f);
-		DayFoodMul = 0.6f;
+		Food = FMath::Max(0.f, Food - 30.f);
+		DayFoodMul = 0.5f;
 		for (int32 I = 0; I < CropParts.Num(); ++I) { if (I % 5 != 0) { Garden->SetShown(CropParts[I], false); } }
 		Garden->Refresh();
 		if (Boar) { Boar->OrderLeave(CellF(-4.f, 12.f)); }
-		Toast(TEXT("The boar tramples the garden: -25 food, and the harvest is halved for today."));
+		Toast(TEXT("The boar tramples the garden: -30 food, and the harvest is halved for today."));
 	}
 	else if (Idx == 1)
 	{
-		for (ATSCUnit* C : EventUnits) { if (C && C->IsAlive()) { C->OrderLeave(CellF(-5.f, 12.f)); } }
+		for (ATSCUnit* C : EventUnits) { if (C && C->IsAlive()) { C->bFights = false; C->Quarry = nullptr; C->bInvulnerable = false; C->OrderLeave(CellF(-5.f, 12.f)); } }
 		EventUnits.Reset();
-		if (Hunter->IsAlive())
+		if (Hunter->IsAlive()) { Hunter->Kill(); } // backstop only: the fog-born kill him well before the 45 s timeout
+		// The villagers near the gate do not just pick their axes up again: they stop, turn to where he fell and stand a while.
+		const FVector Fallen = Hunter->Loc2D();
+		for (ATSCUnit* U : Units)
 		{
-			Toast(TEXT("Against all odds Hakon fights the fog-born off and waits out the night by the wall."));
-			Hunter->OrderHold(CellF(7.5f, 12.f));
+			if (U && U != Hunter && U->Team == ETSCTeam::Villager && U->IsAlive() && FVector::Dist2D(U->GetActorLocation(), Fallen) < 1600.f)
+			{
+				U->MournAt = Fallen;
+				U->MournTimer = FMath::FRandRange(5.f, 8.f);
+				UE_LOG(LogSaga, Display, TEXT("[Saga] MOURN %s %.1fs"), *U->GetName(), U->MournTimer);
+			}
 		}
-		else
-		{
-			Toast(TEXT("Hakon the hunter falls outside the gate he could not reach."));
-		}
+		Toast(TEXT("Hakon the hunter falls outside the gate he could not reach. The fog-born have learned the way."));
 		bPendingTimber = true;
 	}
 	else if (Idx == 2)
@@ -2336,17 +2370,17 @@ void ATSCGameMode::ApplyAshen(int32 Idx)
 	if (Idx == 0)
 	{
 		TransitionRegion(TSCRegion::Garden, CellF(18.f, 16.5f));
-		GardenMul = 0.75f;
+		GardenMul = 0.6f;
 		if (Boar) { Boar->OrderLeave(CellF(-4.f, 12.f)); }
-		Toast(TEXT("EDIT: the boar turns away from an old stone wall. The crops are safe, but the ash-poor soil will always yield less."));
+		Toast(TEXT("EDIT: the boar turns away from an old stone wall. The crops are safe and the wall will shield the longhouse, but the ash-poor soil will always yield less."));
 	}
 	else if (Idx == 1)
 	{
 		TransitionRegion(TSCRegion::Forest, CellCenter(TreeX, TreeY));
-		ForestMul = 0.6f;
+		ForestMul = 0.5f;
 		bPendingTimber = false;
-		BlockRect(TreeX, TreeY + 1, 1, 2, false);
-		for (ATSCUnit* C : EventUnits) { if (C && C->IsAlive()) { C->bFights = false; C->OrderLeave(CellF(-5.f, 12.f)); } }
+		SetSpruceFallen(false);
+		for (ATSCUnit* C : EventUnits) { if (C && C->IsAlive()) { C->bFights = false; C->Quarry = nullptr; C->bInvulnerable = false; C->OrderLeave(CellF(-5.f, 12.f)); } }
 		EventUnits.Reset();
 		if (Hunter->IsAlive())
 		{
@@ -2485,7 +2519,7 @@ void ATSCGameMode::StartNight()
 	PlayMusic(NightMusic);
 	NightTime = 0.f;
 	DayFlags = 0;
-	BlockRect(TreeX, TreeY + 1, 1, 2, false);
+	SetSpruceFallen(false);
 	bPendingTimber = false;
 	for (FTSCPlot& P : Plots) { P.Marker->SetActorHiddenInGame(true); }
 	for (ATSCUnit* U : Units) { if (U && U->Team != ETSCTeam::Villager && U->IsAlive()) { U->bGone = true; U->SetActorHiddenInGame(true); } }
@@ -2493,13 +2527,13 @@ void ATSCGameMode::StartNight()
 
 	SetGate(true);
 	StartNightWood = Wood;
-	const float Spent = FMath::Min(Wood, 200.f);
+	const float Spent = FMath::Min(Wood, 300.f);
 	Wood -= Spent;
-	GateMaxHP = GateHP = 190.f + Spent * 0.8f + (Scenes[1].bAshen ? 80.f : 0.f);
-	HallMaxHP = HallHP = 420.f;
-	bHungryNight = Food < 20.f;
-	bFedNight = Food >= 110.f;
-	const float HpMul = bHungryNight ? 0.72f : (bFedNight ? 1.18f : 1.f);
+	GateMaxHP = GateHP = 150.f + Spent;
+	HallMaxHP = HallHP = 300.f + (Scenes[0].bAshen ? 120.f : 0.f);
+	bHungryNight = Food < 100.f;
+	bFedNight = Food >= 200.f;
+	const float HpMul = bHungryNight ? 0.72f : (bFedNight ? 1.15f : 1.f);
 	const float DmgMul = bHammerBlessing ? 1.3f : 1.f;
 
 	auto Arm = [&](ATSCUnit* U, const FVector& Pos)
@@ -2517,9 +2551,10 @@ void ATSCGameMode::StartNight()
 	};
 	if (Hunter->IsAlive()) { Hunter->HP = Hunter->MaxHP; Arm(Hunter, CellF(9.9f, 12.f)); }
 	if (Woodcutter->IsAlive()) { Arm(Woodcutter, CellF(10.4f, 11.2f)); }
+	const bool bBound = Shield->IsAlive() && bShieldWounded && Healer->IsAlive();
 	if (Shield->IsAlive())
 	{
-		if (!bShieldWounded) { Shield->HP = Shield->MaxHP; }
+		Shield->HP = Shield->MaxHP * (!bShieldWounded ? 1.f : (bBound ? 0.8f : 0.45f));
 		Arm(Shield, CellF(25.8f, 12.f));
 	}
 	Workers.RemoveAll([](const TObjectPtr<ATSCUnit>& U) { return !U || !U->IsAlive(); });
@@ -2545,10 +2580,26 @@ void ATSCGameMode::StartNight()
 	for (const ATSCUnit* U : Units) { if (U && U->Team == ETSCTeam::Villager && U->IsAlive()) { ++NightVillagersAtStart; } }
 	NightDefendersLost = 0;
 	EnemiesSlain = 0;
+	const int32 Pack = Scenes[1].bAshen ? 0 : 3;                          // the fog-born that killed Hakon lead others in
+	const int32 Calm = bStagBlessing ? (Scenes[2].bAshen ? 0 : 1) : 0;
+	CreatureWaves[0] = CreatureWaves[1] = 3 + Pack - Calm;
+	CreatureWaves[2] = 4 + Pack - (bStagBlessing ? 1 : 0);
+	RaiderWaves[0] = Scenes[3].bAshen ? 2 : 3;
+	RaiderWaves[1] = Scenes[3].bAshen ? 1 : 3;
 	ShowBanner(TEXT("The Final Night.  The gate is barred with the last of the timber. Creatures gather in the fog; raiders pull for the shore."), 12.f);
 	Toast(TSCLoc::Tr(FString::Printf(TEXT("%d wood braces the gate (%d strength)."), FMath::RoundToInt(Spent), FMath::RoundToInt(GateMaxHP)))
 		+ TSCLoc::Tr(bHungryNight ? TEXT(" Your defenders are weak with hunger.") : (bFedNight ? TEXT(" Your defenders are well fed.") : TEXT("")))
-		+ TSCLoc::Tr(bHammerBlessing ? TEXT(" The Hammer blesses their axes.") : TEXT("")));
+		+ TSCLoc::Tr(bHammerBlessing ? TEXT(" The Hammer blesses their axes.") : TEXT(""))
+		+ TSCLoc::Tr(Scenes[0].bAshen ? TEXT(" The old stone wall shields the longhouse door.") : TEXT("")));
+	Toast(Scenes[1].bAshen ? TEXT("Hakon's bow covers the west gate.")
+		: TEXT("No bow answers at the west gate. The fog-born that killed Hakon lead the others in."));
+	Toast(Healer->IsAlive() ? (bBound ? TEXT("Sigrun waits by the hearth with clean bandages. She has bound Torvald's wounds.") : TEXT("Sigrun waits by the hearth with clean bandages."))
+		: (ExtraHealers > 0 ? TEXT("Sigrun is gone, but the healer's hut tends the wounded in her place.") : TEXT("No healer waits by the hearth. Every wound tonight stays open.")));
+	Toast(Scenes[3].bAshen ? TEXT("Torvald stands whole on the empty shore. Only three raiders can wade in.")
+		: TEXT("Six raiders pull for the dock. The scouts told them how few spears wait there."));
+	UE_LOG(LogSaga, Display, TEXT("[Saga] NIGHT gate=%d hall=%d food=%d hpmul=%.2f creatures=%d/%d/%d raiders=%d/%d villagers=%d"),
+		FMath::RoundToInt(GateMaxHP), FMath::RoundToInt(HallMaxHP), FMath::FloorToInt(Food), HpMul,
+		CreatureWaves[0], CreatureWaves[1], CreatureWaves[2], RaiderWaves[0], RaiderWaves[1], NightVillagersAtStart);
 }
 
 void ATSCGameMode::GetAssaultGoal(const ATSCUnit* U, FVector& OutPos, ETSCStructure& OutStruct) const
@@ -2603,11 +2654,15 @@ void ATSCGameMode::OnUnitDied(ATSCUnit* U)
 	{
 		if (U->bNamed && Phase == ETSCPhase::Night) { Toast(TSCLoc::Fmt(TEXT("{0} has fallen."), { TSCLoc::Tr(U->DisplayName) })); }
 		if (Phase == ETSCPhase::Night) { ++NightDefendersLost; }
-		else { UpdateJobs(); }
+		else { UpdateJobs(); UE_LOG(LogSaga, Display, TEXT("[Saga] DAYDEATH %s scene=%d at %s"), *U->GetName(), ActiveScene, *U->GetActorLocation().ToString()); }
 	}
 	else if (Phase == ETSCPhase::Night)
 	{
 		++EnemiesSlain;
+	}
+	else if (U->Team != ETSCTeam::Animal)
+	{
+		UE_LOG(LogSaga, Display, TEXT("[Saga] DAYKILL %s scene=%d at %s"), *U->GetName(), ActiveScene, *U->GetActorLocation().ToString());
 	}
 }
 
@@ -2617,9 +2672,6 @@ void ATSCGameMode::SimNight(float Dt)
 	auto Once = [this](int32 Bit, float T) { if (NightTime >= T && !(DayFlags & (1 << Bit))) { DayFlags |= 1 << Bit; return true; } return false; };
 
 	// creatures: three waves out of the fog. The Stag's blessing thins them.
-	int32 PerWave = 3;
-	const int32 Calm = bStagBlessing ? (Scenes[2].bAshen ? 0 : 1) : 0; // the Stag calls some of them back
-	const int32 LastCalm = bStagBlessing ? 1 : 0;
 	auto CreatureWave = [&](int32 N)
 	{
 		for (int32 I = 0; I < N; ++I)
@@ -2630,9 +2682,9 @@ void ATSCGameMode::SimNight(float Dt)
 			C->OrderAssault();
 		}
 	};
-	if (Once(0, 5.f)) { CreatureWave(PerWave - Calm); Toast(TEXT("Pale shapes drift out of the fog toward the palisade.")); }
-	if (Once(1, 24.f)) { CreatureWave(PerWave - Calm); }
-	if (Once(2, 44.f)) { CreatureWave(PerWave + 1 - LastCalm); }
+	if (Once(0, 5.f)) { CreatureWave(CreatureWaves[0]); Toast(TEXT("Pale shapes drift out of the fog toward the palisade.")); }
+	if (Once(1, 24.f)) { CreatureWave(CreatureWaves[1]); }
+	if (Once(2, 44.f)) { CreatureWave(CreatureWaves[2]); }
 
 	// raiders: they land at the dock, or wade ashore if the dock is ash
 	const bool bDockAshen = Scenes[3].bAshen;
@@ -2646,8 +2698,8 @@ void ATSCGameMode::SimNight(float Dt)
 			R->OrderAssault();
 		}
 	};
-	if (Once(3, 9.f)) { if (Ocean) { Ocean->PlayLanding(FVector2D(CellF(bDockAshen ? 29.6f : 31.5f, 11.5f)), 0.8f); } RaiderWave(bDockAshen ? 2 : 3); Toast(bDockAshen ? TEXT("With no dock to land at, a few raiders wade ashore through the surf.") : TEXT("Raiders leap onto the dock!")); }
-	if (Once(4, 34.f)) { RaiderWave(bDockAshen ? 1 : 3); }
+	if (Once(3, 9.f)) { if (Ocean) { Ocean->PlayLanding(FVector2D(CellF(bDockAshen ? 29.6f : 31.5f, 11.5f)), 0.8f); } RaiderWave(RaiderWaves[0]); Toast(bDockAshen ? TEXT("With no dock to land at, a few raiders wade ashore through the surf.") : TEXT("Raiders leap onto the dock!")); }
+	if (Once(4, 34.f)) { RaiderWave(RaiderWaves[1]); }
 
 	// healing
 	const float Heal = (Healer->IsAlive() ? 2.6f : 0.f) + ExtraHealers * 1.6f;
@@ -2722,17 +2774,33 @@ void ATSCGameMode::BuildEpilogue(bool bHallFell)
 	for (const ATSCUnit* U : Units) { if (U && U->Team == ETSCTeam::Villager && U->IsAlive()) { ++Survivors; } }
 	const int32 NumAshen = (Scenes[0].bAshen ? 1 : 0) + (Scenes[1].bAshen ? 1 : 0) + (Scenes[2].bAshen ? 1 : 0) + (Scenes[3].bAshen ? 1 : 0);
 	const bool bHakon = Hunter->IsAlive(), bUlf = Woodcutter->IsAlive(), bSigrun = Healer->IsAlive(), bTorvald = Shield->IsAlive();
+	const int32 NamedAlive = (bHakon ? 1 : 0) + (bUlf ? 1 : 0) + (bSigrun ? 1 : 0) + (bTorvald ? 1 : 0);
+	const int32 CutsUsed = MaxEdits - EditsLeft;
+	const int32 Lost = NightDefendersLost;
 
-	if (bHallFell) { EpilogueTitle = TEXT("THE SAGA OF THE COLD HEARTH"); }
-	else if (NumAshen >= 3) { EpilogueTitle = TEXT("THE SAGA OF THE ASHEN HOLD"); }
-	else if (NumAshen == 0) { EpilogueTitle = TEXT("THE SAGA OF THE GREEN CLEARING"); }
-	else { EpilogueTitle = TEXT("THE SAGA OF TWO TELLINGS"); }
+	enum class EEnd { Cold, Bitter, Ashen, Long, Green, Two };
+	const EEnd End = bHallFell ? EEnd::Cold
+		: (NamedAlive <= 2 || Lost * 2 >= NightVillagersAtStart) ? EEnd::Bitter
+		: NamedAlive == 4 ? EEnd::Long
+		: NumAshen >= 3 ? EEnd::Ashen
+		: NumAshen <= 1 ? EEnd::Green : EEnd::Two;
+	switch (End)
+	{
+	case EEnd::Cold:   EpilogueTitle = TEXT("THE SAGA OF THE COLD HEARTH"); break;
+	case EEnd::Bitter: EpilogueTitle = TEXT("THE SAGA OF THE BITTER DAWN"); break;
+	case EEnd::Ashen:  EpilogueTitle = TEXT("THE SAGA OF THE ASHEN HOLD"); break;
+	case EEnd::Long:   EpilogueTitle = TEXT("THE SAGA OF THE LONG HEARTH"); break;
+	case EEnd::Green:  EpilogueTitle = TEXT("THE SAGA OF THE GREEN CLEARING"); break;
+	default:           EpilogueTitle = TEXT("THE SAGA OF TWO TELLINGS"); break;
+	}
 
-	Epilogue.Add(TEXT("Hear me, the skald, for I sing the saga you cut."));
+	Epilogue.Add(CutsUsed == 0
+		? TEXT("Hear me, the skald. You held the knife and never cut, so I sing the saga as it was written.")
+		: TEXT("Hear me, the skald, for I sing the saga you cut."));
 
 	// the garden
 	Epilogue.Add(Scenes[0].bAshen
-		? TEXT("When the boar came, you gave the garden a wall of old burnt stone. Not a cabbage was lost, and ever after the thin grey soil gave a little less.")
+		? TEXT("When the boar came, you gave the garden a wall of old burnt stone. Not a cabbage was lost, the thin grey soil gave a little less ever after, and on the last night that wall stood before the longhouse door.")
 		: TEXT("When the boar came, you let the saga run. It trampled the green rows, the gardeners cursed, and the good soil forgave them by next morning."));
 
 	// the gate
@@ -2744,9 +2812,7 @@ void ATSCGameMode::BuildEpilogue(bool bHallFell)
 	}
 	else
 	{
-		Epilogue.Add(bHakon
-			? TEXT("The spruce fell across the gate and you did not cut the scene. Hakon stood alone before the fog and, past all reckoning, lived to see the dawn saws.")
-			: TEXT("The spruce fell across the gate and you let it lie. Hakon the hunter died on the wrong side of it, and in the morning his people sawed that timber into planks and did not speak."));
+		Epilogue.Add(TEXT("The spruce fell across the gate and you let it lie. Hakon the hunter died on the wrong side of it, and on the last night the pale things that killed him came back and brought others."));
 	}
 
 	// the grove
@@ -2800,15 +2866,14 @@ void ATSCGameMode::BuildEpilogue(bool bHallFell)
 	// the night
 	if (bGateBroken)
 	{
-		Epilogue.Add(FString::Printf(TEXT("The west gate, braced with %d wood, broke, and pale things drifted between the houses."), FMath::RoundToInt(FMath::Min(StartNightWood, 200.f))));
+		Epilogue.Add(FString::Printf(TEXT("The west gate, braced with %d wood, broke, and pale things drifted between the houses."), FMath::RoundToInt(FMath::Min(StartNightWood, 300.f))));
 	}
 	else
 	{
-		Epilogue.Add(FString::Printf(TEXT("The west gate, braced with %d wood, held until dawn."), FMath::RoundToInt(FMath::Min(StartNightWood, 200.f))));
+		Epilogue.Add(FString::Printf(TEXT("The west gate, braced with %d wood, held until dawn."), FMath::RoundToInt(FMath::Min(StartNightWood, 300.f))));
 	}
-	if (bHungryNight) { Epilogue.Add(TEXT("They fought on empty bellies, for the stores had run dry.")); }
+	if (bHungryNight) { Epilogue.Add(TEXT("They fought on empty bellies, for the stores had run thin.")); }
 
-	const int32 Lost = NightDefendersLost;
 	if (bHallFell)
 	{
 		Epilogue.Add(FString::Printf(TEXT("%d fell that night, and at the end the longhouse hearth was kicked cold. %d walked away along the shore, carrying the story and little else."), Lost, Survivors));
@@ -2824,16 +2889,32 @@ void ATSCGameMode::BuildEpilogue(bool bHallFell)
 
 	// what the settlement became
 	FString Became;
-	if (bHallFell) { Became = TEXT("So the clearing is a place of cold stones now, and this cut of the saga ends here."); }
-	else if (NumAshen >= 3) { Became = TEXT("So it became a hard grey hold of stone and stumps: safe, hungry, and proud of its scars."); }
-	else if (NumAshen == 0) { Became = TEXT("So it stayed a green and dangerous place, rich in timber and mushrooms, that buries its dead under living trees."); }
-	else { Became = TEXT("So it became a village of two sagas, green on one side and ash on the other, and its children learned both."); }
+	switch (End)
+	{
+	case EEnd::Cold:
+		Became = CutsUsed == 0
+			? TEXT("You never once called CUT! The saga ran as it was written, and it was written as a lament: the clearing is a place of cold stones now.")
+			: CutsUsed >= MaxEdits
+			? TEXT("Even three cuts could not hold back the night. So the clearing is a place of cold stones now, and this cut of the saga ends here.")
+			: TEXT("Your cuts were too few, or fell on the wrong scenes. So the clearing is a place of cold stones now, and this cut of the saga ends here.");
+		break;
+	case EEnd::Bitter: Became = TEXT("So the hearth still burns, but too few are left to sit around it, and no one sings a dawn like that as a victory."); break;
+	case EEnd::Ashen:  Became = TEXT("So it became a hard grey hold of stone and stumps: safe, hungry, and proud of its scars."); break;
+	case EEnd::Long:   Became = TEXT("So you cut only what had to be cut, and the land stayed half green and half ash. This is the telling the skalds will keep."); break;
+	case EEnd::Green:  Became = TEXT("So it stayed a green and dangerous place, rich in timber and mushrooms, that buries its dead under living trees."); break;
+	default:           Became = TEXT("So it became a village of two sagas, green on one side and ash on the other, and its children learned both."); break;
+	}
 	const TArray<FString> Names = { bHakon ? TEXT("Hakon") : TEXT(""), bUlf ? TEXT("Ulf") : TEXT(""), bSigrun ? TEXT("Sigrun") : TEXT(""), bTorvald ? TEXT("Torvald") : TEXT("") };
 	FString Living;
 	int32 NLiving = 0;
 	for (const FString& N : Names) { if (!N.IsEmpty()) { Living += (NLiving++ ? TEXT(", ") : TEXT("")) + TSCLoc::Tr(N); } }
 	Epilogue.Add(TSCLoc::Tr(Became) + (NLiving > 0 ? TSCLoc::Fmt(TEXT(" Of the four you knew by name, {0} still sit by the fire."), { Living }) : TSCLoc::Tr(TEXT(" Of the four you knew by name, none are left to hear it."))));
 	Epilogue.Add(FString::Printf(TEXT("Edits used: %d of %d."), MaxEdits - EditsLeft, MaxEdits));
+
+	static const TCHAR* EndNames[] = { TEXT("COLD_HEARTH"), TEXT("BITTER_DAWN"), TEXT("ASHEN_HOLD"), TEXT("LONG_HEARTH"), TEXT("GREEN_CLEARING"), TEXT("TWO_TELLINGS") };
+	UE_LOG(LogSaga, Display, TEXT("[Saga] RESULT takes=%c%c%c%c cuts=%d ending=%s hallhp=%d gate=%s lost=%d survivors=%d named=%d hungry=%d"),
+		Scenes[0].bAshen ? 'A' : 'L', Scenes[1].bAshen ? 'A' : 'L', Scenes[2].bAshen ? 'A' : 'L', Scenes[3].bAshen ? 'A' : 'L',
+		CutsUsed, EndNames[(int32)End], FMath::RoundToInt(HallHP), bGateBroken ? TEXT("broken") : TEXT("held"), Lost, Survivors, NamedAlive, bHungryNight ? 1 : 0);
 }
 
 // =====================================================================================================================
