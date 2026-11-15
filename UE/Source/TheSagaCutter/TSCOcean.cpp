@@ -1,6 +1,7 @@
 // The Saga Cutter - game jam project.
 
 #include "TSCOcean.h"
+#include "TSCStrandvik.h"
 #include "TSCTerrain.h"
 #include "TSCPrimActor.h"
 
@@ -172,6 +173,7 @@ FVector2D ATSCOcean::SlopeAt(const FVector2D& P) const
 
 void ATSCOcean::Build(float InShoreX, float InSurfaceZ)
 {
+	TSCStrandvik::SyncRiver(GetWorld());
 	ShoreX = InShoreX;
 	SurfaceZ = InSurfaceZ;
 
@@ -352,6 +354,8 @@ void ATSCOcean::HideBeachApron()
 
 void ATSCOcean::BuildBeach()
 {
+	// The beach strip is part of Map_Saga's procedural land; on the landscape the land is the Landscape actor.
+	if (TSCStrandvik::IsActive(GetWorld())) { return; }
 	// Columns along Y: dense where the camera can look, coarse beyond.
 	TArray<float> Ys;
 	for (float Y = -45000.f; Y < -7000.f - 1.f; Y += 500.f) { Ys.Add(Y); }
@@ -459,6 +463,7 @@ void ATSCOcean::BuildBeach()
 
 void ATSCOcean::BuildShorePlants()
 {
+	if (TSCStrandvik::IsActive(GetWorld())) { return; }
 	FRandomStream Random(71539);
 	auto Scatter = [&](const TCHAR* Path, const TCHAR* Name, bool bFern) -> UMaterialInstanceDynamic*
 	{

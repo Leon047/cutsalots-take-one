@@ -1,6 +1,7 @@
 // The Saga Cutter - game jam project.
 
 #include "TSCGameMode.h"
+#include "TSCStrandvik.h"
 
 #include "Components/AudioComponent.h"
 #include "Components/DirectionalLightComponent.h"
@@ -303,9 +304,22 @@ bool ATSCGameMode::IsInsideSettlement(const FVector& P) const
 // World
 // =====================================================================================================================
 
+/** Strandvik: mean landscape height under a W x H rectangle (world cm) starting at Corner, 5 x 5 samples. */
+static float TSCFootprintZ(const FVector& Corner, float W, float H)
+{
+	float Sum = 0.f;
+	for (int32 Iy = 0; Iy < 5; ++Iy)
+	{
+		for (int32 Ix = 0; Ix < 5; ++Ix) { Sum += TSCStrandvik::Height(FVector2D(Corner.X + W * Ix / 4.f, Corner.Y + H * Iy / 4.f)); }
+	}
+	return Sum / 25.f;
+}
+
 ATSCPrimActor* ATSCGameMode::SpawnPrim(const FVector& Loc, int32 Region)
 {
-	ATSCPrimActor* A = GetWorld()->SpawnActor<ATSCPrimActor>(ATSCPrimActor::StaticClass(), Loc, FRotator::ZeroRotator);
+	FVector Grounded = Loc;
+	if (TSCStrandvik::IsActive(GetWorld())) { Grounded.Z += TSCStrandvik::Height(FVector2D(Loc)); }  // Strandvik: Loc.Z is relative to the landscape
+	ATSCPrimActor* A = GetWorld()->SpawnActor<ATSCPrimActor>(ATSCPrimActor::StaticClass(), Grounded, FRotator::ZeroRotator);
 	A->Region = Region;
 	Prims.Add(A);
 	return A;
@@ -313,7 +327,7 @@ ATSCPrimActor* ATSCGameMode::SpawnPrim(const FVector& Loc, int32 Region)
 
 ATSCUnit* ATSCGameMode::SpawnUnit(ETSCRole InRole, const FString& Name, const FVector& Loc)
 {
-	ATSCUnit* U = GetWorld()->SpawnActor<ATSCUnit>(ATSCUnit::StaticClass(), FVector(Loc.X, Loc.Y, 0.f), FRotator::ZeroRotator);
+	ATSCUnit* U = GetWorld()->SpawnActor<ATSCUnit>(ATSCUnit::StaticClass(), FVector(Loc.X, Loc.Y, TSCStrandvik::IsActive(GetWorld()) ? GroundReliefAt(Loc) : 0.f), FRotator::ZeroRotator);
 	U->Init(this, InRole, Name);
 	Units.Add(U);
 	return U;
@@ -329,7 +343,7 @@ static float GTSCSkyDrift = 0.f, GTSCShadowDrift = 0.f; // extra cloud travel ea
 static void TSCUpdateSky(UDirectionalLightComponent* Sun, float AshAmount, float K, bool bNight, float DayF, float Thick, float Dt, float SpeedMul);
 ATSCUnit* ATSCGameMode::SpawnWildlife(ETSCRole InRole, const FVector& Loc, float Radius, int32 Region)
 {
-	ATSCUnit* U = GetWorld()->SpawnActor<ATSCUnit>(ATSCUnit::StaticClass(), FVector(Loc.X, Loc.Y, 0.f), FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f));
+	ATSCUnit* U = GetWorld()->SpawnActor<ATSCUnit>(ATSCUnit::StaticClass(), FVector(Loc.X, Loc.Y, TSCStrandvik::IsActive(GetWorld()) ? GroundReliefAt(Loc) : 0.f), FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f));
 	U->Init(this, InRole, FString());
 	U->Region = Region;
 	// Forest animals stay outside the palisade, livestock inside it; the stag and the grove fox live where they were put.
@@ -535,6 +549,7 @@ void ATSCGameMode::BuildWorld()
 				continue;
 			}
 			const FVector Jitter((Rand01(X, Y, 4) - 0.5f) * 70.f, (Rand01(X, Y, 5) - 0.5f) * 70.f, 0.f);
+			if (TSCStrandvik::IsActive(GetWorld()) && TSCStrandvik::RiverClearance(FVector2D(CellCenter(X, Y) + Jitter)) < 120.f) { continue; }
 			ATSCPrimActor* T = SpawnPrim(CellCenter(X, Y) + Jitter, bForest ? TSCRegion::Forest : bGroveTree ? TSCRegion::Grove : TSCRegion::None);
 			BuildTree(T, X * 57 + Y * 13, true);
 			T->Refresh();
@@ -602,6 +617,12 @@ void ATSCGameMode::BuildWorld()
 			{
 				const FVector Dir = Knots[I + 1] - Knots[I];
 				ATSCPrimActor* P = SpawnPrim(Knots[I]);
+				if (TSCStrandvik::IsActive(GetWorld()))
+				{
+					// on a slope stand the section on the lower end (a buried foot looks better than a floating one)
+					const float Z0 = TSCStrandvik::Height(FVector2D(Knots[I])), Z1 = TSCStrandvik::Height(FVector2D(Knots[I + 1]));
+					P->SetActorLocation(FVector(Knots[I].X, Knots[I].Y, FMath::Min(Z0, Z1) - 5.f));
+				}
 				P->SetActorRotation(FRotator(0.f, FMath::RadiansToDegrees(FMath::Atan2(Dir.Y, Dir.X)) - 90.f, 0.f));
 				BuildPalisadeSegment(P, Dir.Size2D(), Seg++);
 				P->Refresh();
@@ -615,6 +636,11 @@ void ATSCGameMode::BuildWorld()
 		SetBlocked(GateX - 1, GateY + 1, false);
 	}
 	Gate = SpawnPrim(CellCorner(GateX, GateY));
+	if (TSCStrandvik::IsActive(GetWorld()))
+	{
+		const FVector G0 = CellCorner(GateX, GateY), GC = CellCorner(GateX, GateY + 1);
+		Gate->SetActorLocation(FVector(G0.X, G0.Y, FMath::Min(TSCStrandvik::Height(FVector2D(G0)), TSCStrandvik::Height(FVector2D(GC)))));
+	}
 	BuildGate(Gate, GateLeaves);
 	Gate->Refresh();
 	ProDressing.Add(Gate);
@@ -638,6 +664,7 @@ void ATSCGameMode::BuildWorld()
 	auto Place = [&](int32 X, int32 Y, int32 W, int32 H, int32 Region = 0)
 	{
 		ATSCPrimActor* A = SpawnPrim(CellCorner(X, Y), Region);
+		if (TSCStrandvik::IsActive(GetWorld())) { const FVector C0 = CellCorner(X, Y); A->SetActorLocation(FVector(C0.X, C0.Y, TSCFootprintZ(C0, W * CELL, H * CELL))); }
 		BlockRect(X, Y, W, H);
 		GroundExclusions.Emplace(FVector2D(CellCorner(X, Y)), FVector2D(CellCorner(X + W, Y + H)));
 		A->bStepParts = true;  // lets the prologue raise it tile by tile; at full progress nothing changes
@@ -666,17 +693,37 @@ void ATSCGameMode::BuildWorld()
 		}
 	}
 	Garden = SpawnPrim(CellCorner(16, 15), TSCRegion::Garden);
+	if (TSCStrandvik::IsActive(GetWorld())) { const FVector C0 = CellCorner(16, 15); Garden->SetActorLocation(FVector(C0.X, C0.Y, TSCFootprintZ(C0, 4 * CELL, 3 * CELL))); }
 	BuildGarden(Garden, 4, 3, CropParts);
 	Garden->Refresh();
 	ProDressing.Add(Garden);
 
 	DockActor = SpawnPrim(CellCorner(26, 11), TSCRegion::Dock);
 	BuildDock(DockActor, 6, 2, CrateParts);
+	if (TSCStrandvik::IsActive(GetWorld()))
+	{
+		// Strandvik: the deck keeps its height over the sea (Z 0); the piles are lengthened down to the ground below them.
+		const FVector DockOrigin = DockActor->GetActorLocation();
+		DockActor->SetActorLocation(FVector(DockOrigin.X, DockOrigin.Y, 0.f));
+		for (FTSCPart& Part : DockActor->Parts)
+		{
+			UStaticMesh* Mesh = Part.Comp ? Part.Comp->GetStaticMesh() : nullptr;
+			if (!Mesh || !Mesh->GetName().Contains(TEXT("Cylinder"))) { continue; }   // the piles
+			const FVector Rel = Part.Comp->GetRelativeLocation();
+			const float Top = Rel.Z + 50.f * Part.Scale.Z, Foot = Rel.Z - 50.f * Part.Scale.Z;
+			const float Bottom = TSCStrandvik::Height(FVector2D(DockOrigin.X + Rel.X, DockOrigin.Y + Rel.Y)) - 35.f;
+			if (Bottom >= Foot) { continue; }
+			Part.Scale.Z = (Top - Bottom) / 100.f;
+			Part.Comp->SetRelativeScale3D(Part.Scale);
+			Part.Comp->SetRelativeLocation(FVector(Rel.X, Rel.Y, 0.5f * (Top + Bottom)));
+		}
+	}
 	DockActor->Refresh();
 	ProDressing.Add(DockActor);
 	{
 		ShipMooring = CellF(30.6f, 14.4f) + FVector(0.f, 0.f, -6.f);
 		Longship = SpawnPrim(ShipMooring, TSCRegion::Dock);
+		if (TSCStrandvik::IsActive(GetWorld())) { Longship->SetActorLocation(ShipMooring); }  // floats: the sea owns its Z
 		LongshipSail = BuildLongship(Longship);
 		Longship->Refresh();
 		SetSailHoisted(0.f); // moored: the sail is down (the prologue hoists it for the voyage)
@@ -687,6 +734,7 @@ void ATSCGameMode::BuildWorld()
 		for (int32 Y = 0; Y < GH; ++Y) { if (!(Y == 11 || Y == 12) || X >= 32) { SetBlocked(X, Y, true); } }
 	}
 	RaiderBoat = SpawnPrim(CellF(40.f, 12.f) + FVector(0.f, 0.f, -4.f));
+	if (TSCStrandvik::IsActive(GetWorld())) { RaiderBoat->SetActorLocation(CellF(40.f, 12.f) + FVector(0.f, 0.f, -4.f)); }  // floats
 	BuildRaiderBoat(RaiderBoat);
 	RaiderBoat->Refresh();
 	RaiderBoat->SetActorHiddenInGame(true);
@@ -700,6 +748,7 @@ void ATSCGameMode::BuildWorld()
 		for (int32 I = 0; I < 3; ++I)
 		{
 			ATSCPrimActor* A = SpawnPrim(CellF(BarrelCells[I].X, BarrelCells[I].Y), TSCRegion::Dock);
+			if (TSCStrandvik::IsActive(GetWorld())) { A->SetActorLocation(CellF(BarrelCells[I].X, BarrelCells[I].Y)); }  // floats
 			BuildBarrel(A);
 			A->Refresh();
 			A->SetActorRotation(FRotator(0.f, Rand01(I, 7) * 360.f, 0.f));
@@ -710,6 +759,7 @@ void ATSCGameMode::BuildWorld()
 		for (int32 I = 0; I < 4; ++I)
 		{
 			ATSCPrimActor* A = SpawnPrim(CellF(WoodCells[I].X, WoodCells[I].Y), TSCRegion::Dock);
+			if (TSCStrandvik::IsActive(GetWorld())) { A->SetActorLocation(CellF(WoodCells[I].X, WoodCells[I].Y)); }  // floats
 			BuildDriftwood(A, I);
 			A->Refresh();
 			A->SetActorRotation(FRotator(0.f, Rand01(I, 7) * 360.f, 0.f));
@@ -723,6 +773,7 @@ void ATSCGameMode::BuildWorld()
 	{
 		const int32 PenX = 21, PenY = 21, PenW = 4, PenH = 3;
 		ATSCPrimActor* Pen = SpawnPrim(CellCorner(PenX, PenY));
+		if (TSCStrandvik::IsActive(GetWorld())) { const FVector C0 = CellCorner(PenX, PenY); Pen->SetActorLocation(FVector(C0.X, C0.Y, TSCFootprintZ(C0, PenW * CELL, PenH * CELL))); }
 		BuildCattlePen(Pen, PenW * CELL, PenH * CELL);
 		Pen->Refresh();
 		ProDressing.Add(Pen);
@@ -750,6 +801,7 @@ void ATSCGameMode::BuildWorld()
 		GroundExclusions.Emplace(FVector2D(CellCorner(P.Cell.X, P.Cell.Y)),
 			FVector2D(CellCorner(P.Cell.X + 3, P.Cell.Y + 2)));
 		P.Marker = SpawnPrim(CellCorner(P.Cell.X, P.Cell.Y));
+		if (TSCStrandvik::IsActive(GetWorld())) { const FVector C0 = CellCorner(P.Cell.X, P.Cell.Y); P.Marker->SetActorLocation(FVector(C0.X, C0.Y, TSCFootprintZ(C0, 3 * CELL, 2 * CELL))); }
 		BuildPlotMarker(P.Marker, 3, 2);
 		P.Marker->Refresh();
 		P.Marker->SetActorHiddenInGame(true);
@@ -898,6 +950,7 @@ void ATSCGameMode::CollectLevelProps()
 	if (!bAltarFound)
 	{
 		AltarPos = CellCenter(16, 2);
+		if (TSCStrandvik::IsActive(GetWorld())) { AltarPos.Z = TSCStrandvik::Height(FVector2D(AltarPos)); }
 		UE_LOG(LogSaga, Warning, TEXT("[Saga] No stone altar (SM_Altar) found in the level, praying at a default spot"));
 	}
 	UE_LOG(LogSaga, Display, TEXT("[Saga] Prologue: %d level props inside the wall, %d road fence pieces"), ProLevelProps.Num(), ProRoadFence.Num());
@@ -1001,6 +1054,7 @@ void ATSCGameMode::BuildPrologueExtras()
 		{
 			if (WallShape(X + 0.5f, Y + 0.5f) > 0.9f || Rand01(X, Y, 23) > 0.36f) { continue; }
 			const FVector Jitter((Rand01(X, Y, 24) - 0.5f) * 90.f, (Rand01(X, Y, 25) - 0.5f) * 90.f, 0.f);
+			if (TSCStrandvik::IsActive(GetWorld()) && TSCStrandvik::RiverClearance(FVector2D(CellCenter(X, Y) + Jitter)) < 120.f) { continue; }
 			ATSCPrimActor* T = SpawnPrim(CellCenter(X, Y) + Jitter);
 			BuildTree(T, X * 41 + Y * 7, false);
 			T->Refresh();
@@ -1299,7 +1353,9 @@ void ATSCGameMode::SimPrologue(float Dt)
 		if (W->IsHidden() == bShow) { W->SetActorHiddenInGame(!bShow); }
 		if (!bShow) { continue; }
 		const FVector Front = CellF(6.7f - (I % 2) * 1.1f, 9.3f + I * 0.95f);
-		W->SetActorLocation(FMath::Lerp(Front + FVector(-700.f, 0.f, 0.f), Front, A));
+		FVector WatcherPos = FMath::Lerp(Front + FVector(-700.f, 0.f, 0.f), Front, A);
+		if (TSCStrandvik::IsActive(GetWorld())) { WatcherPos.Z = GroundReliefAt(WatcherPos); }
+		W->SetActorLocation(WatcherPos);
 		W->SetActorRotation(FRotator::ZeroRotator);  // facing the gate
 		W->SetActorScale3D(FVector(FMath::Max(0.05f, A)));
 		W->Idle(Dt);
@@ -1423,11 +1479,20 @@ void ATSCGameMode::Tick(float DeltaSeconds)
 
 float ATSCGameMode::GroundReliefAt(const FVector& P) const
 {
+	if (TSCStrandvik::IsActive(GetWorld()))
+	{
+		// units on the dock stand on its deck (Z 0, see BuildWorld), not on the sea floor below it
+		const FVector C = CellCorner(26, 11);
+		const bool bOnDock = DockActor && P.X >= C.X && P.X <= C.X + 6.f * CELL && P.Y >= C.Y && P.Y <= C.Y + 2.f * CELL;
+		const float H = TSCStrandvik::Height(FVector2D(P));
+		return bOnDock ? FMath::Max(H, 0.f) : H;
+	}
 	return Terrain ? Terrain->GroundRelief(FVector2D(P)) : 0.f;
 }
 
 float ATSCGameMode::WadeDepthAt(const FVector& P) const
 {
+	if (TSCStrandvik::IsActive(GetWorld())) { return 0.f; }
 	const float ShoreX = Ocean ? Ocean->ShoreXAt(P.Y) : CellF(28.f, 0.f).X;
 	if (P.X <= ShoreX) { return 0.f; }
 	if (DockActor && !DockActor->IsHidden() && DockActor->SagaAlpha < 0.5f)
@@ -1581,7 +1646,8 @@ void ATSCGameMode::SpawnEmbers(int32 Region, int32 Count)
 	const FIntRect& R = Region == TSCRegion::Forest ? ForestRect : Region == TSCRegion::Garden ? GardenRect : Region == TSCRegion::Grove ? GroveRect : DockRect;
 	for (int32 I = 0; I < Count && Embers.Num() < 140; ++I)
 	{
-		const FVector P = CellF(FMath::FRandRange((float)FMath::Max(R.Min.X, -2), (float)FMath::Min(R.Max.X, GW)), FMath::FRandRange((float)FMath::Max(R.Min.Y, 0), (float)FMath::Min(R.Max.Y, GH)));
+		FVector P = CellF(FMath::FRandRange((float)FMath::Max(R.Min.X, -2), (float)FMath::Min(R.Max.X, GW)), FMath::FRandRange((float)FMath::Max(R.Min.Y, 0), (float)FMath::Min(R.Max.Y, GH)));
+		if (TSCStrandvik::IsActive(GetWorld())) { P.Z = TSCStrandvik::Height(FVector2D(P)); }
 		ATSCPrimActor* A = GetWorld()->SpawnActor<ATSCPrimActor>(ATSCPrimActor::StaticClass(), P + FVector(0.f, 0.f, FMath::FRandRange(10.f, 200.f)), FRotator(FMath::FRandRange(0.f, 90.f), FMath::FRandRange(0.f, 90.f), 0.f));
 		const bool bAsh = FMath::FRand() < 0.35f;
 		const int32 Idx = A->AddPart(ETSCShape::Cube, FVector::ZeroVector, FRotator::ZeroRotator, FVector(bAsh ? 0.26f : 0.18f, bAsh ? 0.26f : 0.18f, 0.04f), bAsh ? Pal::Ash * 2.f : Pal::Fire);
@@ -1900,7 +1966,7 @@ void ATSCGameMode::StartBuild(EBuilding Type)
 		(bHammer ? bHammerBlessing : bStagBlessing) = true;
 		if (!AltarGlow)
 		{
-			AltarGlow = SpawnPrim(AltarPos);
+			AltarGlow = SpawnPrim(TSCStrandvik::IsActive(GetWorld()) ? FVector(AltarPos.X, AltarPos.Y, 0.f) : AltarPos);  // SpawnPrim adds the ground on Strandvik
 		}
 		AltarGlow->AddLight(FVector(0.f, 0.f, 160.f), bHammer ? Pal::Fire : Pal::Shroom, 4.f, 2.f, 600.f);
 		AltarGlow->Refresh();
@@ -1919,6 +1985,7 @@ void ATSCGameMode::StartBuild(EBuilding Type)
 	P.Marker->SetActorHiddenInGame(true);
 	const int32 W = Type == EBuilding::Sawmill ? 3 : 2;
 	P.Building = SpawnPrim(CellCorner(P.Cell.X, P.Cell.Y));
+	if (TSCStrandvik::IsActive(GetWorld())) { const FVector C0 = CellCorner(P.Cell.X, P.Cell.Y); P.Building->SetActorLocation(FVector(C0.X, C0.Y, TSCFootprintZ(C0, W * CELL, 2 * CELL))); }
 	BuildPlotBuilding(P.Building, Type, Idx + 2);
 	P.Building->SetBuildProgress(0.f);
 	BlockRect(P.Cell.X, P.Cell.Y, W, 2);
