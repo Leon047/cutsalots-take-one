@@ -2,17 +2,17 @@
 DECO_BigChimney	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_BigChimney.SM_VH_DECO_BigChimney	197.7	153.3	650.0
 DECO_Chimney	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_Chimney.SM_VH_DECO_Chimney	72.8	73.2	156.4
 DECO_DragonHead	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_DragonHead.SM_VH_DECO_DragonHead	189.3	48.0	176.4
-DECO_Knotwork	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_Knotwork.SM_VH_DECO_Knotwork	150.5	7.1	20.5
+DECO_Knotwork	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_Knotwork.SM_VH_DECO_Knotwork	150.6	8.9	21.1
 DECO_RavenBanner	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_RavenBanner.SM_VH_DECO_RavenBanner	75.2	4.5	60.0
-DECO_RidgeBoss	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_RidgeBoss.SM_VH_DECO_RidgeBoss	61.0	61.0	73.0
+DECO_RidgeBoss	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_RidgeBoss.SM_VH_DECO_RidgeBoss	58.7	59.4	77.9
 DECO_Shield	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_Shield.SM_VH_DECO_Shield	60.0	12.0	59.1
 DECO_Sign_Anvil	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_Sign_Anvil.SM_VH_DECO_Sign_Anvil	90.0	10.0	72.0
 DECO_Sign_Barrel	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_Sign_Barrel.SM_VH_DECO_Sign_Barrel	90.0	11.0	72.0
 DECO_Sign_Saw	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DECO_Sign_Saw.SM_VH_DECO_Sign_Saw	90.0	11.5	72.0
 DOOR_Arched	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DOOR_Arched.SM_VH_DOOR_Arched	95.0	10.9	139.0
 DOOR_StairsHigh	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DOOR_StairsHigh.SM_VH_DOOR_StairsHigh	146.0	265.0	190.0
-DOOR_Steps	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DOOR_Steps.SM_VH_DOOR_Steps	143.0	132.0	56.0
-DOOR_Surround	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DOOR_Surround.SM_VH_DOOR_Surround	138.0	17.6	164.0
+DOOR_Steps	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DOOR_Steps.SM_VH_DOOR_Steps	123.3	108.4	56.8
+DOOR_Surround	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_DOOR_Surround.SM_VH_DOOR_Surround	135.9	17.7	164.0
 FLOOR_Plank	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FLOOR_Plank.SM_VH_FLOOR_Plank	240.0	240.0	20.0
 FND_Boulder_A	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FND_Boulder_A.SM_VH_FND_Boulder_A	106.2	97.7	59.0
 FND_Boulder_B	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FND_Boulder_B.SM_VH_FND_Boulder_B	80.4	97.1	47.0
@@ -45,7 +45,7 @@ PROP_Barrel	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_Barrel
 PROP_Crate	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_Crate.SM_VH_PROP_Crate	67.0	67.0	62.0
 PROP_Flume	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_Flume.SM_VH_PROP_Flume	72.0	404.3	445.9
 PROP_Forge	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_Forge.SM_VH_PROP_Forge	188.5	102.9	336.1
-PROP_Hoist	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_Hoist.SM_VH_PROP_Hoist	197.0	32.3	307.0
+PROP_Hoist	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_Hoist.SM_VH_PROP_Hoist	226.6	47.9	298.1
 PROP_LogPile	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_LogPile.SM_VH_PROP_LogPile	160.6	115.0	103.0
 PROP_Sack	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_Sack.SM_VH_PROP_Sack	41.5	35.3	56.0
 PROP_SawBench	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_SawBench.SM_VH_PROP_SawBench	225.0	70.0	200.0
@@ -57,7 +57,7 @@ PROP_Workbench	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_Wor
 ROOF_Bargeboard	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_ROOF_Bargeboard.SM_VH_ROOF_Bargeboard	15.0	302.9	293.4
 ROOF_Eave_Flare	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_ROOF_Eave_Flare.SM_VH_ROOF_Eave_Flare	248.2	69.4	59.2
 ROOF_Eave_Strip	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_ROOF_Eave_Strip.SM_VH_ROOF_Eave_Strip	57.2	71.3	56.4
-ROOF_LeanTo	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_ROOF_LeanTo.SM_VH_ROOF_LeanTo	128.7	96.2	54.6
+ROOF_LeanTo	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_ROOF_LeanTo.SM_VH_ROOF_LeanTo	128.0	95.0	59.6
 ROOF_RidgeCap	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_ROOF_RidgeCap.SM_VH_ROOF_RidgeCap	240.0	83.1	48.9
 ROOF_RidgeCap_Strip	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_ROOF_RidgeCap_Strip.SM_VH_ROOF_RidgeCap_Strip	50.0	83.1	48.9
 ROOF_Shingle_A	Blender	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_ROOF_Shingle_A.SM_VH_ROOF_Shingle_A	23.9	52.3	6.5
@@ -81,3 +81,4 @@ PROP_Shield_04	Imported	/Game/Props/Shield/SM_Shield_04.SM_Shield_04	18.5	70.3	7
 PROP_Shield_05	Imported	/Game/Props/Shield/SM_Shield_05.SM_Shield_05	18.5	70.3	70.3
 PROP_Shield_06	Imported	/Game/Props/Shield/SM_Shield_06.SM_Shield_06	18.5	70.3	70.3
 PROP_Shield_07	Imported	/Game/Props/Shield/SM_Shield_07.SM_Shield_07	18.5	70.3	70.3
+PROP_GardenBed	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_PROP_GardenBed.SM_VH_PROP_GardenBed	199.7	200.7	34.8

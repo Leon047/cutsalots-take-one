@@ -181,3 +181,19 @@ is Unreal `(x*100, -y*100, z*100)` and no rotation is baked into the assets. Nan
 
 Notes: `export_to_unreal.py` classifies a module as `Tripo` when any of its materials matches `M_Viking*_Set<N>`. The tab-separated files
 are generated from `kit_export.json` plus the bounding boxes measured in Unreal after import.
+
+## Pier (`Pier_Dock`)
+
+Assembled from the kit pier modules (`PIER_Deck`, `PIER_Post`, `PIER_Lamp`, `PIER_Bollard`, `PIER_BannerPole`, plus `PROP_Crate/Barrel/Sack`):
+10 decks (5 along X x 2 across Y), 12 posts, 2 lamps, 2 bollards, 1 banner pole, 8 props. `VikingHouses.tsv`: `Pier_Dock 5 1200 480 320.0`.
+Origin = centre of the west end of the deck at ground level; the pier runs along +X (0..1200 cm), Y -240..+240 cm (Unreal axes). Decks sit at Z=45 cm.
+Group `Shell` = structure, `Removable` = the crates, barrels and sacks (the game can hide the crates for the raid event).
+`export_to_unreal.py` writes it from the `Pier_Assembled` collection (the `PIERS` list). Z of the pier is NOT sunk (only the houses were).
+
+## Props pack swap (Tripo `wooden_props`)
+
+`DECO_Knotwork`, `DOOR_Steps`, `ROOF_LeanTo`, `DOOR_Surround`, `DECO_RidgeBoss`, `PROP_Hoist` were replaced by the loose parts of one Tripo FBX
+(`integrate_tripo_props.py`: splits the FBX into parts, scales each to the old module's size and pivot, same module names, so all houses update).
+They now use `M_VikingProps_Set01` (textures `VikingProps_Set01_*.jpg`) and are `Tripo` in the TSV. New module `PROP_GardenBed` (the 2 x 2 m garden bed tile, 199.7 x 200.7 x 34.8 cm).
+Notes: `DOOR_Steps` is a bit narrower/shorter than before (123 x 108 cm); `ROOF_LeanTo` is a flat stone slab tilted 25 degrees by the script; `PROP_Hoist` is 227 cm wide.
+Copy before the swap: `VikingHouse_Modular.pre_props_swap.blend`.
