@@ -174,6 +174,9 @@ ATSCGameMode::ATSCGameMode()
 	DogAttenuation->Attenuation.AttenuationShapeExtents = FVector(9000.f, 0.f, 0.f);
 	DogAttenuation->Attenuation.FalloffDistance = 16000.f;
 
+	static ConstructorHelpers::FObjectFinder<USoundBase> BoarFlee(TEXT("/Game/Vikings/Audio/Boar/SW_BoarFlee.SW_BoarFlee"));
+	BoarFleeSound = BoarFlee.Object;
+
 	static ConstructorHelpers::FObjectFinder<USoundBase> AxeWood(TEXT("/Game/Vikings/Audio/Axe/SW_AxeWood.SW_AxeWood"));
 	static ConstructorHelpers::FObjectFinder<USoundBase> AxeEnemy(TEXT("/Game/Vikings/Audio/Axe/SW_AxeEnemy.SW_AxeEnemy"));
 	AxeWoodImpact = AxeWood.Object;
@@ -2372,7 +2375,16 @@ void ATSCGameMode::ResolveLiving(int32 Idx)
 		DayFoodMul = 0.5f;
 		for (int32 I = 0; I < CropParts.Num(); ++I) { if (I % 5 != 0) { Garden->SetShown(CropParts[I], false); } }
 		Garden->Refresh();
-		if (Boar) { Boar->OrderLeave(CellF(-4.f, 12.f)); }
+		if (Boar)
+		{
+			Boar->OrderLeave(CellF(-4.f, 12.f));
+			if (BoarFleeSound)
+			{
+				UGameplayStatics::SpawnSoundAttached(BoarFleeSound, Boar->GetRootComponent(),
+					NAME_None, FVector::ZeroVector, EAttachLocation::KeepRelativeOffset,
+					true, 0.8f, 1.f, 0.f, DogAttenuation);
+			}
+		}
 		Toast(TEXT("The boar tramples the garden: -30 food, and the harvest is halved for today."));
 	}
 	else if (Idx == 1)

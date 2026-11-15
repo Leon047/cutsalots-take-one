@@ -326,6 +326,7 @@ private:
 	UPROPERTY() TObjectPtr<USoundBase> DogGrowl;
 	UPROPERTY() TObjectPtr<USoundBase> DogAttackBark;
 	UPROPERTY() TObjectPtr<USoundAttenuation> DogAttenuation;
+	UPROPERTY() TObjectPtr<USoundBase> BoarFleeSound;
 	UPROPERTY() TObjectPtr<USoundBase> AxeWoodImpact;
 	UPROPERTY() TObjectPtr<USoundBase> AxeEnemyImpact;
 	UPROPERTY() TObjectPtr<USoundAttenuation> AxeAttenuation;
