@@ -173,6 +173,23 @@ ATSCGameMode::ATSCGameMode()
 	DogAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("DogAttenuation"));
 	DogAttenuation->Attenuation.AttenuationShapeExtents = FVector(9000.f, 0.f, 0.f);
 	DogAttenuation->Attenuation.FalloffDistance = 16000.f;
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> AxeWood(TEXT("/Game/Vikings/Audio/Axe/SW_AxeWood.SW_AxeWood"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> AxeEnemy(TEXT("/Game/Vikings/Audio/Axe/SW_AxeEnemy.SW_AxeEnemy"));
+	AxeWoodImpact = AxeWood.Object;
+	AxeEnemyImpact = AxeEnemy.Object;
+	AxeAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("AxeAttenuation"));
+	AxeAttenuation->Attenuation.AttenuationShapeExtents = FVector(9000.f, 0.f, 0.f);
+	AxeAttenuation->Attenuation.FalloffDistance = 16000.f;
+}
+
+void ATSCGameMode::PlayAxeImpact(const FVector& Location, bool bWood)
+{
+	USoundBase* Sound = bWood ? AxeWoodImpact.Get() : AxeEnemyImpact.Get();
+	if (!Sound) { return; }
+
+	UGameplayStatics::PlaySoundAtLocation(this, Sound, Location,
+		bWood ? 0.46f : 0.64f, FMath::FRandRange(0.92f, 1.08f), 0.f, AxeAttenuation);
 }
 
 void ATSCGameMode::PlayDogSound(const ATSCUnit& Dog, ETSCDogSound Cue)

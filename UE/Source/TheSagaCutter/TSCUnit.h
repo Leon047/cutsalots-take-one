@@ -232,6 +232,7 @@ private:
 	float SelfDefenseThink = 0.f;
 	float AttackTimer = 0.f;
 	float SwingTimer = 0.f;
+	bool bUsesCombatAxe = false;
 	float AnimPhase = 0.f;
 	float DeathTimer = 0.f;
 	float ThinkTimer = 0.f;

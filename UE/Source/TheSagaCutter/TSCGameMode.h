@@ -238,6 +238,7 @@ public:
 	void AddTracer(const FVector& From, const FVector& To, const FLinearColor& Col);
 	void OnUnitDied(ATSCUnit* U);
 	void PlayDogSound(const ATSCUnit& Dog, ETSCDogSound Cue);
+	void PlayAxeImpact(const FVector& Location, bool bWood);
 	void Toast(const FString& Text);
 	/** Visual only: how deep a unit standing at P is in the shallows (0 on land and on standing dock planks). */
 	float GroundReliefAt(const FVector& P) const;
@@ -321,6 +322,9 @@ private:
 	UPROPERTY() TObjectPtr<USoundBase> DogGrowl;
 	UPROPERTY() TObjectPtr<USoundBase> DogAttackBark;
 	UPROPERTY() TObjectPtr<USoundAttenuation> DogAttenuation;
+	UPROPERTY() TObjectPtr<USoundBase> AxeWoodImpact;
+	UPROPERTY() TObjectPtr<USoundBase> AxeEnemyImpact;
+	UPROPERTY() TObjectPtr<USoundAttenuation> AxeAttenuation;
 	FTimerHandle MusicTimer;
 
 	// scenes

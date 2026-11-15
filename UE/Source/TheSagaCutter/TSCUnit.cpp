@@ -515,7 +515,8 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 	else
 	{
 		const bool bAxe = Role == ETSCRole::Shield || Role == ETSCRole::Woodcutter || FMath::RandBool();
-		if (!bAxe || !AddWeapon(DefAxe, true))
+		bUsesCombatAxe = bAxe && AddWeapon(DefAxe, true) != nullptr;
+		if (!bUsesCombatAxe)
 		{
 			AddWeapon(DefSword, true);
 		}
@@ -1515,6 +1516,10 @@ void ATSCUnit::Sim(float Dt)
 					}
 					AttackTimer = AttackInterval * FMath::FRandRange(0.9f, 1.1f);
 					StartSwing(0.35f, AttackTimer, AttackRange > 300.f ? ETSCAnim::Shoot : Role == ETSCRole::Healer ? ETSCAnim::Punch : ETSCAnim::Slash);
+					if (bUsesCombatAxe && AttackRange <= 300.f && Damage > 0.f && !T->bInvulnerable)
+					{
+						GM->PlayAxeImpact(T->GetActorLocation(), false);
+					}
 					T->Hurt(Damage);
 					if (AttackRange > 300.f)
 					{
@@ -1563,6 +1568,7 @@ void ATSCUnit::Sim(float Dt)
 				// Chopping (axe) or gathering (picking up).
 				const bool bChop = Role == ETSCRole::Woodcutter || (Role == ETSCRole::Worker && Job == ETSCJob::Wood);
 				StartSwing(0.6f, 0.f, bChop ? ETSCAnim::Slash : ETSCAnim::PickUp);
+				if (bChop) { GM->PlayAxeImpact(GetActorLocation(), true); }
 			}
 			if (WorkTimer <= 0.f) { WorkPhase = 1 - WorkPhase; }
 		}
@@ -1785,7 +1791,11 @@ bool ATSCUnit::SimTimberWork(float Dt)
 	const FRotator Face = (Tree->GetActorLocation() - Loc2D()).Rotation();
 	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Face.Yaw, 0.f), Dt, 12.f));
 	if (WorkTimer <= 0.f) { WorkTimer = TimberStageDuration; }
-	if (SwingTimer <= 0.f && OneShotTimer <= 0.f) { StartSwing(0.6f, 0.f, ETSCAnim::Slash); }
+	if (SwingTimer <= 0.f && OneShotTimer <= 0.f)
+	{
+		StartSwing(0.6f, 0.f, ETSCAnim::Slash);
+		GM->PlayAxeImpact(Tree->GetActorLocation(), true);
+	}
 	WorkTimer -= Dt;
 	if (WorkTimer <= 0.f)
 	{
