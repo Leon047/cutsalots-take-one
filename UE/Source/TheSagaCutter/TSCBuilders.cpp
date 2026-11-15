@@ -607,9 +607,46 @@ namespace TSC
 		// The raised rim is replaced by the rail fence that stands beside the field (SM_WoodenFenceSet_01), at half size:
 		// two sections per cell edge, each half a cell long, scaled uniformly (so also half as tall and thick).
 		UStaticMesh* FenceMesh2 = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Props/WoodenFenceSet/SM_WoodenFenceSet_01.SM_WoodenFenceSet_01"));
-		auto Fence = [A, W, FenceMesh2](int32 Cx, int32 Cy, int32 Edge)
+		// The Ashen take ("the boar turns away from an old stone wall"): the rail fence becomes a low dry-stone wall made of the
+		// Viking house kit's stone footing (SM_VH_FND_Straight, 242 x 77 x 54 cm, one per cell edge) with an FND_Corner block
+		// at each corner, in the kit's own stone material tinted ash-grey. Plain stone tiles stand in if the kit is missing.
+		UStaticMesh* WallStraight = KitMesh(TEXT("FND_Straight"));
+		UStaticMesh* WallCorner = KitMesh(TEXT("FND_Corner"));
+		const float WallScale = WallStraight ? CELL * 1.04f / FMath::Max(WallStraight->GetBoundingBox().GetSize().X, 1.0) : 1.f;
+		auto PlaceStone = [A, WallScale](UStaticMesh* Mesh, const FVector& Mid, float Yaw)
+		{
+			const FBox B = Mesh->GetBoundingBox();
+			const FQuat Q(FVector::UpVector, FMath::DegreesToRadians(Yaw));
+			const FVector C = B.GetCenter() * WallScale;
+			const int32 P = A->AddMeshPart(Mesh, Mid - Q.RotateVector(FVector(C.X, C.Y, 0.f)) + FVector(0.f, 0.f, -B.Min.Z * WallScale - 4.f),
+				FRotator(0.f, Yaw, 0.f), FVector(WallScale));
+			if (UMaterialInstanceDynamic* MID = A->Parts[P].Comp->CreateDynamicMaterialInstance(0))
+			{
+				A->Parts[P].MID = MID;
+				A->Parts[P].LCol = FLinearColor::White;
+				A->Parts[P].ACol = FLinearColor(0.52f, 0.5f, 0.48f);
+			}
+			A->SetVis(P, ETSCVis::AshenOnly);
+		};
+		auto StoneWall = [A, WallStraight, &PlaceStone](int32 Cx, int32 Cy, int32 Edge)
+		{
+			const bool bEdgeX = (Edge == 0 || Edge == 2);
+			if (!WallStraight)
+			{
+				const int32 F = Wall(A, Cx, Cy, Edge, 0.f, Pal::Stone, 1.f, 0.3f, 0.3f);
+				A->SetAshen(F, Pal::StoneDark * 1.3f);
+				A->SetVis(F, ETSCVis::AshenOnly);
+				return;
+			}
+			const FVector Mid = bEdgeX ? FVector((Cx + 0.5f) * CELL, (Edge == 0 ? Cy : Cy + 1) * CELL, 0.f)
+				: FVector((Edge == 3 ? Cx : Cx + 1) * CELL, (Cy + 0.5f) * CELL, 0.f);
+			const bool bFlip = (Cx * 3 + Cy * 5 + Edge) % 2 == 1; // alternate the stone pattern between segments
+			PlaceStone(WallStraight, Mid, (bEdgeX ? 0.f : 90.f) + (bFlip ? 180.f : 0.f));
+		};
+		auto Fence = [A, W, FenceMesh2, &StoneWall](int32 Cx, int32 Cy, int32 Edge)
 		{
 			if (Edge == 0 && Cx == W / 2) { return; } // entrance
+			StoneWall(Cx, Cy, Edge);
 			if (FenceMesh2)
 			{
 				const FBox B = FenceMesh2->GetBoundingBox();
@@ -625,18 +662,20 @@ namespace TSC
 				{
 					const FVector Mid = bEdgeX ? FVector((Cx + 0.25f + 0.5f * K) * CELL, (Edge == 0 ? Cy : Cy + 1) * CELL, 0.f)
 						: FVector((Edge == 3 ? Cx : Cx + 1) * CELL, (Cy + 0.25f + 0.5f * K) * CELL, 0.f);
-					A->AddMeshPart(FenceMesh2, Mid - Q.RotateVector(FVector(C.X, C.Y, 0.f)) + FVector(0.f, 0.f, -B.Min.Z * S), FRotator(0.f, Yaw, 0.f), FVector(S));
+					const int32 P = A->AddMeshPart(FenceMesh2, Mid - Q.RotateVector(FVector(C.X, C.Y, 0.f)) + FVector(0.f, 0.f, -B.Min.Z * S), FRotator(0.f, Yaw, 0.f), FVector(S));
+					A->SetVis(P, ETSCVis::LivingOnly);
 				}
 				return;
 			}
-			int32 F = Wall(A, Cx, Cy, Edge, 0.f, Pal::Timber, 1.f, 0.3f);
+			const int32 F = Wall(A, Cx, Cy, Edge, 0.f, Pal::Timber, 1.f, 0.3f);
 			A->SetVis(F, ETSCVis::LivingOnly);
-			F = Wall(A, Cx, Cy, Edge, 0.f, Pal::Stone, 1.f, 0.5f, 0.2f);
-			A->SetAshen(F, Pal::StoneDark);
-			A->SetVis(F, ETSCVis::AshenOnly);
 		};
 		for (int32 X = 0; X < W; ++X) { Fence(X, 0, 0); Fence(X, H - 1, 2); }
 		for (int32 Y = 0; Y < H; ++Y) { Fence(0, Y, 3); Fence(W - 1, Y, 1); }
+		if (WallStraight && WallCorner)
+		{
+			for (int32 K = 0; K < 4; ++K) { PlaceStone(WallCorner, FVector((K % 2) * W * CELL, (K / 2) * H * CELL, 0.f), K * 90.f); }
+		}
 		static UStaticMesh* LeafyCrop = LoadNaturalMesh(TEXT("/Game/Props/VegetablePlants/SM_VegetablePlant_01.SM_VegetablePlant_01"));
 		static UStaticMesh* Sprout = LoadNaturalMesh(TEXT("/Game/Props/VegetablePlants/SM_VegetableSprout.SM_VegetableSprout"));
 		// Crop rows.
