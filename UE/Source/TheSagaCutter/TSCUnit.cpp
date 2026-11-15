@@ -41,6 +41,10 @@ namespace
 	const FVikingModel AxolotlDruid{ TEXT("/Game/Characters/axolotl_druid"), TEXT("Axolotl_Druid"), TEXT("Axolotl_DruidCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
 	const FVikingModel AxolotlBlacksmith{ TEXT("/Game/Characters/axolotl_blacksmith"), TEXT("Axolotl_Blacksmith"), TEXT("Axolotl_BlacksmithCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
 	const FVikingModel AxolotlJarl{ TEXT("/Game/Characters/axolotl_jarl"), TEXT("Axolotl_Jarl"), TEXT("Axolotl_JarlCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
+	/** The three raider variants (Tripo masked frog / bird / spotted amphibian), each optional like the others. */
+	const FVikingModel AxolotlFrog{ TEXT("/Game/Characters/axolotl_frog"), TEXT("Axolotl_Frog"), TEXT("Axolotl_FrogCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
+	const FVikingModel AxolotlBird{ TEXT("/Game/Characters/axolotl_bird"), TEXT("Axolotl_Bird"), TEXT("Axolotl_BirdCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
+	const FVikingModel AxolotlAmphibian{ TEXT("/Game/Characters/axolotl_amphibian"), TEXT("Axolotl_Amphibian"), TEXT("Axolotl_AmphibianCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
 
 	const TCHAR* VikingAnimNames[] = { TEXT("Idle"), TEXT("Walk"), TEXT("Run"), TEXT("Walk_Carry"), TEXT("Run_Carry"),
 		TEXT("SwordSlash"), TEXT("Shoot_OneHanded"), TEXT("Punch"), TEXT("PickUp"), TEXT("RecieveHit"), TEXT("Death") };
@@ -95,13 +99,19 @@ namespace
 	/** Arrow length as a fraction of the figure height. */
 	constexpr float ArrowSize = 0.4f;
 
-	/** Wildlife in Content/Animals/<Name>: mesh <Name>, clips <Name>AnimalArmature_<Clip>; Length = nose to tail in cm. */
+	/**
+	 * Wildlife in Content/Animals/<Name>: mesh <Name>, clips <Name>AnimalArmature_<Clip>; Length = nose to tail in cm.
+	 * Folder overrides the package folder (the mushroom creatures live in /Game/Characters/mushroom_<key>); with bFitHeight
+	 * the Length is the standing height instead. Several entries with the same Role: one is picked at random per unit.
+	 */
 	struct FTSCAnimalModel
 	{
 		ETSCRole Role;
 		const TCHAR* Name;
 		float Length;
 		const TCHAR* Attack;
+		const TCHAR* Folder = nullptr;
+		bool bFitHeight = false;
 	};
 	const FTSCAnimalModel AnimalModels[] = {
 		{ ETSCRole::Deer, TEXT("Deer"), 140.f, TEXT("Attack_Headbutt") },
@@ -111,7 +121,13 @@ namespace
 		{ ETSCRole::Husky, TEXT("Husky"), 100.f, TEXT("Attack") },
 		{ ETSCRole::Cow, TEXT("Cow"), 210.f, TEXT("Attack_Headbutt") },
 		{ ETSCRole::Bull, TEXT("Bull"), 230.f, TEXT("Attack_Headbutt") },
+		// Night enemy (Tripo mushrooms on the Bull skeleton): standing heights in cm, purple is the tallest.
+		{ ETSCRole::Creature, TEXT("Mushroom_Purple"), 140.f, TEXT("Attack_Headbutt"), TEXT("/Game/Characters/mushroom_purple"), true },
+		{ ETSCRole::Creature, TEXT("Mushroom_Cup"), 85.f, TEXT("Attack_Headbutt"), TEXT("/Game/Characters/mushroom_cup"), true },
+		{ ETSCRole::Creature, TEXT("Mushroom_Morel"), 130.f, TEXT("Attack_Headbutt"), TEXT("/Game/Characters/mushroom_morel"), true },
 	};
+	/** How far (cm) the mushroom's body rams forward and back during the swing. */
+	constexpr float CreatureLunge = 55.f;
 	// Tuning: the animal FBX are assumed to face +Y like the Vikings; units walk along +X.
 	constexpr float AnimalYaw = -90.f;
 	/** Prey flees from a wolf closer than this (cm; 3.5 cells). */
@@ -173,7 +189,7 @@ void ATSCUnit::Init(ATSCGameMode* InGM, ETSCRole InRole, const FString& InName)
 	case ETSCRole::Woodcutter: Team = ETSCTeam::Villager; MaxHP = 90.f; Damage = 14.f; break;
 	case ETSCRole::Healer: Team = ETSCTeam::Villager; MaxHP = 50.f; Damage = 4.f; break;
 	case ETSCRole::Shield: Team = ETSCTeam::Villager; MaxHP = 170.f; Damage = 13.f; bFights = true; break;
-	case ETSCRole::Creature: Team = ETSCTeam::Creature; MaxHP = 44.f; Damage = 7.f; Speed = 105.f; AttackInterval = 1.5f; AggroRange = 600.f; bFights = true; Height = 170.f; break;
+	case ETSCRole::Creature: Team = ETSCTeam::Creature; MaxHP = 44.f; Damage = 7.f; Speed = 105.f; AttackInterval = 1.5f; AggroRange = 600.f; bFights = true; Height = 170.f; AttackRange = 130.f; break;
 	case ETSCRole::Raider: Team = ETSCTeam::Raider; MaxHP = 62.f; Damage = 10.f; Speed = 165.f; AttackInterval = 1.25f; AggroRange = 650.f; bFights = true; break;
 	case ETSCRole::Boar: Team = ETSCTeam::Animal; MaxHP = 50.f; Damage = 0.f; Speed = 250.f; Height = 80.f; break;
 	case ETSCRole::Deer: Team = ETSCTeam::Animal; MaxHP = 40.f; Damage = 0.f; Speed = 130.f; Height = 110.f; break;
@@ -196,6 +212,11 @@ void ATSCUnit::BuildFigure()
 
 	if (Role == ETSCRole::Creature)
 	{
+		// One of the three mushroom models (random per unit); the primitive figure below is the fallback.
+		if (BuildAnimal())
+		{
+			return;
+		}
 		// Flattened sphere cap with glowing spots, tendrils hanging down.
 		const FLinearColor Pale(0.75f, 0.85f, 0.78f);
 		const int32 Cap = AddPart(ETSCShape::Sphere, FVector(0.f, 0.f, 130.f), FRotator::ZeroRotator, FVector(1.05f, 1.05f, 0.5f), Pale, Body);
@@ -315,7 +336,7 @@ void ATSCUnit::BuildFigure()
 bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 {
 	// Axolotl models (Tripo) are preferred when their assets exist: unnamed workers are the warrior, the four named heroes
-	// have their own class model (archer, druid, blacksmith, jarl). Raiders and anything else stay Vikings. Fallback when the
+	// have their own class model (archer, druid, blacksmith, jarl); raiders are a random frog / bird / amphibian. Anything else stays Viking. Fallback when the
 	// axolotl mesh is missing: Torvald (the named shield-bearer) is the lord; named heroes have a fixed sex (Sigrun the Healer
 	// is a woman); everyone else (workers, raiders) is a man or a woman at random.
 	auto LoadMesh = [](const FVikingModel& M) -> USkeletalMesh*
@@ -343,6 +364,12 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 	else if (Role == ETSCRole::Worker)
 	{
 		Preferred = &AxolotlWarrior;
+	}
+	else if (Role == ETSCRole::Raider)
+	{
+		// Raiders are one of three masked variants, picked at random; a missing mesh falls back to the Vikings below.
+		const FVikingModel* Variants[] = { &AxolotlFrog, &AxolotlBird, &AxolotlAmphibian };
+		Preferred = Variants[FMath::RandRange(0, 2)];
 	}
 	if (Preferred)
 	{
@@ -444,22 +471,35 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 
 bool ATSCUnit::BuildAnimal()
 {
+	// Entries of this role; with several (the mushrooms) start at a random one and take the first whose mesh exists.
+	TArray<const FTSCAnimalModel*> Candidates;
+	for (const FTSCAnimalModel& M : AnimalModels) { if (M.Role == Role) { Candidates.Add(&M); } }
+	if (Candidates.IsEmpty()) { return false; }
+	const int32 Start = Candidates.Num() > 1 ? FMath::RandRange(0, Candidates.Num() - 1) : 0;
 	const FTSCAnimalModel* Model = nullptr;
-	for (const FTSCAnimalModel& M : AnimalModels) { if (M.Role == Role) { Model = &M; break; } }
-	if (!Model) { return false; }
-	const FString Folder = FString::Printf(TEXT("/Game/Animals/%s"), Model->Name);
-	USkeletalMesh* SkMesh = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%s/%s.%s"), *Folder, Model->Name, Model->Name));
+	FString Folder;
+	USkeletalMesh* SkMesh = nullptr;
+	for (int32 K = 0; K < Candidates.Num() && !SkMesh; ++K)
+	{
+		const FTSCAnimalModel* C = Candidates[(Start + K) % Candidates.Num()];
+		const FString F = C->Folder ? FString(C->Folder) : FString::Printf(TEXT("/Game/Animals/%s"), C->Name);
+		const FString MeshPath = FString::Printf(TEXT("%s/%s.%s"), *F, C->Name, C->Name);
+		if (USkeletalMesh* Found = FindObject<USkeletalMesh>(nullptr, *MeshPath)) { SkMesh = Found; }
+		else if (FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(MeshPath))) { SkMesh = LoadObject<USkeletalMesh>(nullptr, *MeshPath); }
+		if (SkMesh) { Model = C; Folder = F; }
+	}
 	if (!SkMesh)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Saga] Animal mesh not found: %s/%s (a primitive stand-in is used)"), *Folder, Model->Name);
+		UE_LOG(LogTemp, Warning, TEXT("[Saga] Animal mesh not found for role %d (a primitive stand-in is used)"), (int32)Role);
 		return false;
 	}
 
-	// Fit nose-to-tail length, feet on the ground.
+	// Fit nose-to-tail length (mushrooms: standing height), feet on the ground.
 	const FBox Box = SkMesh->GetImportedBounds().GetBox();
 	const FVector Size = Box.GetSize();
-	const float Scale = Model->Length / (float)FMath::Max3(Size.X, Size.Y, 1.0);
+	const float Scale = Model->Length / (Model->bFitHeight ? FMath::Max(Size.Z, 1.0) : (float)FMath::Max3(Size.X, Size.Y, 1.0));
 	UE_LOG(LogTemp, Display, TEXT("[Saga] Animal %s: imported size %s, scale %.3f"), Model->Name, *Size.ToString(), Scale);
+	if (Role == ETSCRole::Creature) { Height = Size.Z * Scale; }
 
 	Mesh = NewObject<USkeletalMeshComponent>(this);
 	Mesh->SetMobility(EComponentMobility::Movable);
@@ -1086,7 +1126,9 @@ void ATSCUnit::Sim(float Dt)
 		DeathTimer += Dt;
 		if (Role == ETSCRole::Creature)
 		{
-			SetActorScale3D(FVector(FMath::Max(0.01f, 1.f - DeathTimer * 1.6f)));
+			// Primitive figure: shrinks away at once. Skinned mushroom: the Death clip (1 s) plays, it lies a moment, then shrinks.
+			const float ShrinkAt = Mesh ? 1.6f : 0.f;
+			SetActorScale3D(FVector(FMath::Max(0.01f, 1.f - FMath::Max(0.f, DeathTimer - ShrinkAt) * (Mesh ? 1.1f : 1.6f))));
 		}
 		else
 		{
@@ -1099,7 +1141,7 @@ void ATSCUnit::Sim(float Dt)
 				Body->SetRelativeLocation(FVector(0.f, 0.f, -(DeathTimer - 5.f) * 30.f));
 			}
 		}
-		if (DeathTimer > (Role == ETSCRole::Creature ? 0.7f : 8.f))
+		if (DeathTimer > (Role == ETSCRole::Creature ? (Mesh ? 2.5f : 0.7f) : 8.f))
 		{
 			bGone = true;
 			SetActorHiddenInGame(true);
@@ -1260,7 +1302,14 @@ void ATSCUnit::Animate(float Dt, bool bMoving)
 	AnimPhase += Dt * (bMoving ? 11.f : 2.f);
 	SwingTimer = FMath::Max(0.f, SwingTimer - Dt);
 
-	if (Role == ETSCRole::Creature)
+	if (Role == ETSCRole::Creature && Mesh)
+	{
+		// Skinned mushroom (Bull clips on its own legs): it walks on the ground, no drift. The ram is the swing's lunge: the
+		// whole body moves forward and back over SwingTimer (the Bull's headbutt moves a head the mushrooms do not have).
+		const float Lunge = SwingTimer > 0.f ? CreatureLunge * FMath::Sin(FMath::Clamp(SwingTimer / 0.35f, 0.f, 1.f) * PI) : 0.f;
+		Body->SetRelativeLocation(FVector(Lunge, 0.f, 0.f));
+	}
+	else if (Role == ETSCRole::Creature)
 	{
 		// Drift: slow bob, tendrils sway.
 		Body->SetRelativeLocation(FVector(0.f, 0.f, 14.f * FMath::Sin(AnimPhase * 0.25f)));
@@ -1287,7 +1336,8 @@ void ATSCUnit::Animate(float Dt, bool bMoving)
 			PlayAnim(ETSCAnim::Idle, true);
 			return;
 		}
-		const bool bRun = bGallop || (!IsWildlife() && (Target.IsValid() || Order == ETSCOrder::Assault || Order == ETSCOrder::Shelter));
+		// The mushrooms (speed 105) walk; the gallop is for a fast scale-up only.
+		const bool bRun = bGallop || (!IsWildlife() && Role != ETSCRole::Creature && (Target.IsValid() || Order == ETSCOrder::Assault || Order == ETSCOrder::Shelter));
 		const bool bCarry = Order == ETSCOrder::Work && WorkPhase == 1 && Role != ETSCRole::Hunter;
 		PlayAnim(bCarry ? (bRun ? ETSCAnim::RunCarry : ETSCAnim::WalkCarry) : (bRun ? ETSCAnim::Run : ETSCAnim::Walk), true);
 		return;

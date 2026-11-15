@@ -39,13 +39,14 @@ SOCKETS = [  # name, viking bone, axolotl bone, paw tip bone
 #    is unchanged, so the edge still leads the swing. With the Viking orientation the axe / sword crossed the big head in
 #    Idle, Run and RecieveHit (clearance to a 21 cm head sphere -3.5 / -18 / -4 cm); with (-40, -5): +13 / -1.6 / +13,
 #    SwordSlash +0.8 (scratch scan over the retargeted clips, see the S8 report).
-#  - shield_l: shift (cm toward the elbow, cm along socket +X = out of the shield face) so the shield sits on the
-#    forearm like the Viking socket (~15 Viking units up the forearm) instead of on the paw.
+#  - shield_l: SOCKET_FIT on every character (see the code): face out, strap side on the forearm, forearm through the
+#    straps and the paw on the grip bar. (The older SOCKET_SHIFT for it kept the Viking orientation, which put the
+#    disc across the body with the straps turned away from the arm.)
 # A key without an entry uses the warrior values.
 SOCKET_TUNE = {
     "warrior": {
         "SOCKET_LEAN": {"weapon_r": (-40.0, -5.0)},
-        "SOCKET_SHIFT": {"shield_l": (9.0, 1.5)},
+        "SOCKET_FIT": {"shield_l": {"grip": (0.0, -27.0, -31.0), "unit": 0.205}},
     },
     # S9 (all-classes plan). Hakon: with the Viking orientation the bow showed its string side outward (socket +X, the
     # bow's back, pointed at the body) and leaned 21-25 deg in Idle. 160 deg about +Y turns the string toward the body
@@ -53,7 +54,7 @@ SOCKET_TUNE = {
     # 5 deg (Walk 26, Run 55 with the arm swing), head clearance >= 8 cm (scratch scan over the retargeted clips).
     "archer": {
         "SOCKET_LEAN": {"weapon_r": (-40.0, -5.0), "bow_l": (10.0, 160.0)},
-        "SOCKET_SHIFT": {"shield_l": (9.0, 1.5)},
+        "SOCKET_FIT": {"shield_l": {"grip": (0.0, -27.0, -31.0), "unit": 0.205}},
     },
     # Sigrun: the staff stood upright (Idle tilt 5 deg) but its foot hung 26 cm (mesh) above the ground with the short
     # axolotl arm. The forearm runs within ~21 deg of the staff axis in every clip, so a shift of 14 cm away from the
@@ -62,14 +63,35 @@ SOCKET_TUNE = {
     # the crown in every orientation that keeps Idle upright.
     "druid": {
         "SOCKET_LEAN": {"weapon_r": (-40.0, -5.0)},
-        "SOCKET_SHIFT": {"shield_l": (9.0, 1.5), "staff_r": (-14.0, 3.2)},
+        "SOCKET_SHIFT": {"staff_r": (-14.0, 3.2)},
+        "SOCKET_FIT": {"shield_l": {"grip": (0.0, -27.0, -31.0), "unit": 0.205}},
     },
+    # Raiders: SOCKET_FIT (see the code) puts the strap side on the arm and the forearm through the straps; the older
+    # SOCKET_ROLL / SOCKET_OFFSET notes below describe the first attempt, which left the arm through the disc.
+    # Raiders (frog / bird / amphibian). The Shield_Round mesh is a disc in socket X-Z, so its face normal is +Y (not +X,
+    # see the comment on shield_l above) and the handle is two parallel bars: an arm strap and a grip bar. The Viking
+    # orientation leaves the bars along the forearm. A roll of 90 deg about the socket's own +Y (SOCKET_ROLL, not SOCKET_LEAN: LEAN composes in the parent frame and would turn the disc edge-on) lays them across
+    # it, so the forearm passes under the strap and the fist closes on the grip bar. SOCKET_OFFSET (cm, socket X / Y / Z
+    # before lean and roll) then puts the fist on the grip bar: 1.5 of it is the old shift along X, plus 4 / 4 found by a grid
+    # of shots in PIE. The shield's own shift along X is 0 because after the roll X is no longer the same direction.
+    "frog":      {"SOCKET_LEAN": {"weapon_r": (-40.0, -5.0), },
+                  "SOCKET_FIT": {"shield_l": {"grip": (0.0, -27.0, -31.0), "unit": 0.205}}},
+    "bird":      {"SOCKET_LEAN": {"weapon_r": (-40.0, -5.0), },
+                  "SOCKET_FIT": {"shield_l": {"grip": (0.0, -27.0, -31.0), "unit": 0.205}}},
+    "amphibian": {"SOCKET_LEAN": {"weapon_r": (-40.0, -5.0), },
+                  "SOCKET_FIT": {"shield_l": {"grip": (0.0, -27.0, -31.0), "unit": 0.205}}},
 }
 _stune = copy.deepcopy(SOCKET_TUNE.get(CHAR, SOCKET_TUNE["warrior"]))
 if "SOCKET_LEAN" not in globals():
     SOCKET_LEAN = _stune["SOCKET_LEAN"]
 if "SOCKET_SHIFT" not in globals():
-    SOCKET_SHIFT = _stune["SOCKET_SHIFT"]
+    SOCKET_SHIFT = _stune.get("SOCKET_SHIFT", {})
+if "SOCKET_OFFSET" not in globals():
+    SOCKET_OFFSET = _stune.get("SOCKET_OFFSET", {})
+if "SOCKET_ROLL" not in globals():
+    SOCKET_ROLL = _stune.get("SOCKET_ROLL", {})
+if "SOCKET_FIT" not in globals():
+    SOCKET_FIT = _stune.get("SOCKET_FIT", {})
 FOREARM = {"RightHand": "RightForeArm", "LeftHand": "LeftForeArm"}
 P = unreal.AnimPoseExtensions
 W = unreal.AnimPoseSpaces.WORLD
@@ -118,6 +140,7 @@ for name, vbone, abone, tip in SOCKETS:
     mid = (hand.translation + P.get_bone_pose(ref, tip, W).translation) * 0.5
     loc = hand.inverse_transform_location(mid)
 
+    r_ax0 = r_ax  # socket rotation before the lean: SOCKET_OFFSET is measured in this frame
     if name in SOCKET_LEAN:
         ax_deg, ay_deg = SOCKET_LEAN[name]
 
@@ -125,10 +148,61 @@ for name, vbone, abone, tip in SOCKETS:
             s = math.sin(math.radians(deg) / 2)
             return unreal.Quat(axis[0] * s, axis[1] * s, axis[2] * s, math.cos(math.radians(deg) / 2))
         r_ax = r_ax.multiply(_q((1, 0, 0), ax_deg)).multiply(_q((0, 1, 0), ay_deg))
-    if name in SOCKET_SHIFT:
+    if name in SOCKET_ROLL:
+        # a roll about the socket's own +Y (the face normal of Shield_Round): spins the item in its own plane, so the disc
+        # keeps facing the same way and only the handle turns (measured: the angle between old and new socket is exactly
+        # the roll, about local Y). Same as the SOCKET_LEAN +Y term, but kept apart so the unrolled frame stays available.
+        _rs = math.sin(math.radians(SOCKET_ROLL[name]) / 2)
+        r_ax = r_ax.multiply(unreal.Quat(0, _rs, 0, math.cos(math.radians(SOCKET_ROLL[name]) / 2)))
+    if name in SOCKET_FIT:
+        # Fit the item to the arm instead of nudging the Viking socket. Frame solved on Idle frame 0 in hand space:
+        #   item +Z = towards the elbow (forearm axis), item -Y = towards the body (the strap side of Shield_Round
+        #   faces the arm), item +Y = out; item X = Y x Z. The paw centre is put on GRIP (item units, cm = units * UNIT).
+        # Shield_Round (mesh units, disc radius 100): face +Y, boss y +24, disc back y -12, straps y -25..-37; upper strap
+        # z +6..+25, grip bar z -22..-41 (both along X), so the forearm runs along -Z from the upper strap to the grip bar.
+        _fit = SOCKET_FIT[name]
+        _pose = P.get_anim_pose_at_time(ax_idle, 0.0, E)
+        _h = P.get_bone_pose(_pose, abone, W)
+
+        def _hs(b):
+            return _h.inverse_transform_location(P.get_bone_pose(_pose, b, W).translation)
+
+        _mid = (_hs(abone) + _hs(tip)) * 0.5
+        _f = _mid - _hs(FOREARM[abone])
+        _f = _f * (1.0 / _f.length())
+        _b = _hs("Spine") - _mid
+        _n = _b - _f * (_b.x * _f.x + _b.y * _f.y + _b.z * _f.z)
+        _n = _n * (1.0 / _n.length())
+        _ez, _ey = _f * -1.0, _n * -1.0
+        _ex = unreal.Vector(_ey.y * _ez.z - _ey.z * _ez.y, _ey.z * _ez.x - _ey.x * _ez.z, _ey.x * _ez.y - _ey.y * _ez.x)
+        _m = [[_ex.x, _ey.x, _ez.x], [_ex.y, _ey.y, _ez.y], [_ex.z, _ey.z, _ez.z]]
+        _tr = _m[0][0] + _m[1][1] + _m[2][2]
+        if _tr > 0:
+            _s = math.sqrt(_tr + 1.0) * 2
+            _qw, _qx, _qy, _qz = 0.25 * _s, (_m[2][1] - _m[1][2]) / _s, (_m[0][2] - _m[2][0]) / _s, (_m[1][0] - _m[0][1]) / _s
+        elif _m[0][0] > _m[1][1] and _m[0][0] > _m[2][2]:
+            _s = math.sqrt(1.0 + _m[0][0] - _m[1][1] - _m[2][2]) * 2
+            _qw, _qx, _qy, _qz = (_m[2][1] - _m[1][2]) / _s, 0.25 * _s, (_m[0][1] + _m[1][0]) / _s, (_m[0][2] + _m[2][0]) / _s
+        elif _m[1][1] > _m[2][2]:
+            _s = math.sqrt(1.0 + _m[1][1] - _m[0][0] - _m[2][2]) * 2
+            _qw, _qx, _qy, _qz = (_m[0][2] - _m[2][0]) / _s, (_m[0][1] + _m[1][0]) / _s, 0.25 * _s, (_m[1][2] + _m[2][1]) / _s
+        else:
+            _s = math.sqrt(1.0 + _m[2][2] - _m[0][0] - _m[1][1]) * 2
+            _qw, _qx, _qy, _qz = (_m[1][0] - _m[0][1]) / _s, (_m[0][2] + _m[2][0]) / _s, (_m[1][2] + _m[2][1]) / _s, 0.25 * _s
+        _q_item = unreal.Quat(_qx, _qy, _qz, _qw)  # the item mesh's own frame in hand space
+        # The socket is not the item frame: ATSCUnit::AddWeapon maps DefShield's LocalX (item -Y) to socket +X and LocalZ
+        # (item +Z) to socket +Z, so socket +Y = item +X. Socket rotation = item frame * inverse(that mapping).
+        _map = unreal.MathLibrary.make_rot_from_xz(unreal.Vector(0, -1, 0), unreal.Vector(0, 0, 1)).quaternion()
+        r_ax = _q_item.multiply(_map)
+        _g = unreal.Vector(*_fit["grip"]) * _fit["unit"]
+        loc = _mid - _q_item.rotate_vector(_g)
+        log.append("%s fit: forearm %s body-perp %s" % (name, _f, _n))
+    elif name in SOCKET_SHIFT:
         up_cm, out_cm = SOCKET_SHIFT[name]
         elbow = hand.inverse_transform_location(P.get_bone_pose(ref, FOREARM[abone], W).translation)
         loc = loc + elbow * (up_cm / elbow.length()) + r_ax.rotate_vector(unreal.Vector(out_cm, 0, 0))
+    if name in SOCKET_OFFSET:
+        loc = loc + r_ax0.rotate_vector(unreal.Vector(*SOCKET_OFFSET[name]))
 
     PLAN.append((name, abone, loc, r_ax.rotator()))
     log.append("%-8s on %-9s loc (%.2f, %.2f, %.2f) rot %s | Viking %s rot %s | check err deg: %s" % (

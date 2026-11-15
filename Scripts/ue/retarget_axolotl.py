@@ -124,6 +124,18 @@ TUNE = {
         "ARM_ABDUCT": {"RightArm": ((0.7071, 0.0, -0.7071), 20.0), "LeftArm": ((-0.7071, 0.0, -0.7071), 15.0)},
         "FINGER_CURL": {"Right": 35.0, "Left": 35.0},
     },
+    # Raiders (frog / bird / amphibian): same body proportions, but the long human-style paws need a much stronger curl than
+    # the axolotl warrior's 35 deg to close around the sword hilt, axe haft and shield handle (checked with hand close-ups
+    # in PIE). PELVIS_Z is the value the default produced (14.5 * rest hips z / warrior hips z).
+    "frog": {"PELVIS_H": 1.0, "PELVIS_V": 0.45, "PELVIS_Z": 14.84,
+             "ARM_ABDUCT": {"RightArm": ((0.7071, 0.0, -0.7071), 20.0), "LeftArm": ((-0.7071, 0.0, -0.7071), 15.0)},
+             "FINGER_CURL": {"Right": 75.0, "Left": 75.0}},
+    "bird": {"PELVIS_H": 1.0, "PELVIS_V": 0.45, "PELVIS_Z": 14.79,
+             "ARM_ABDUCT": {"RightArm": ((0.7071, 0.0, -0.7071), 20.0), "LeftArm": ((-0.7071, 0.0, -0.7071), 15.0)},
+             "FINGER_CURL": {"Right": 75.0, "Left": 75.0}},
+    "amphibian": {"PELVIS_H": 1.0, "PELVIS_V": 0.45, "PELVIS_Z": 14.46,
+                  "ARM_ABDUCT": {"RightArm": ((0.7071, 0.0, -0.7071), 20.0), "LeftArm": ((-0.7071, 0.0, -0.7071), 15.0)},
+                  "FINGER_CURL": {"Right": 75.0, "Left": 75.0}},
 }
 WARRIOR_HIPS_Z = 29.93  # cm, warrior rest hips height the warrior PELVIS_Z was tuned on
 _dst_ref = unreal.load_asset(DST_MESH).skeleton.get_reference_pose()

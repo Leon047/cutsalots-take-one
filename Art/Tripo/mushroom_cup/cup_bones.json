@@ -1,0 +1,655 @@
+{
+  "source": "Tripo Studio mesh (rig dropped) + Bull skeleton fitted in Blender",
+  "units": "metres, Blender axes (Z up, faces -Y, left = +X); the FBX is in cm and lands +Y-facing in UE",
+  "height_m": 0.7809,
+  "bounds_min": [
+    -0.46611,
+    -0.37842,
+    0.0
+  ],
+  "bounds_max": [
+    0.51332,
+    0.51275,
+    0.78085
+  ],
+  "bone_count": 36,
+  "roles": {
+    "root": "Body",
+    "spine_chain": [
+      "Back",
+      "Torso",
+      "Torso2",
+      "Torso3"
+    ],
+    "neck_chain": [
+      "Neck1",
+      "Neck2",
+      "Neck3",
+      "Head",
+      "Head_end"
+    ],
+    "tail_chain": [
+      "Tail1",
+      "Tail2",
+      "Tail3",
+      "Tail4",
+      "Tail5",
+      "Tail6",
+      "Tail7",
+      "Tail7_end"
+    ],
+    "legs": {
+      "FL": [
+        "FrontShoulder_L",
+        "FrontUpperLeg_L",
+        "FrontLowerLeg_L",
+        "FrontLowerLeg_L_end"
+      ],
+      "FR": [
+        "FrontShoulder_R",
+        "FrontUpperLeg_R",
+        "FrontLowerLeg_R",
+        "FrontLowerLeg_R_end"
+      ],
+      "BL": [
+        "BackShoulder_L",
+        "BackLeg_L",
+        "BackUpperLeg_L",
+        "BackLowerLeg_L",
+        "BackLowerLeg_L_end"
+      ],
+      "BR": [
+        "BackShoulder_R",
+        "BackLeg_R",
+        "BackUpperLeg_R",
+        "BackLowerLeg_R",
+        "BackLowerLeg_R_end"
+      ]
+    },
+    "front": "-Y (head of the creature, ram direction)"
+  },
+  "feet_m": {
+    "BR": [
+      -0.36183,
+      0.17316,
+      0.0
+    ],
+    "BL": [
+      0.28565,
+      0.30206,
+      0.0
+    ],
+    "FR": [
+      -0.1768,
+      -0.24651,
+      0.0
+    ],
+    "FL": [
+      0.25298,
+      -0.22871,
+      0.0
+    ]
+  },
+  "bones": [
+    {
+      "name": "Body",
+      "parent": null,
+      "head": [
+        0.0,
+        -0.02818,
+        0.10475
+      ],
+      "tail": [
+        0.0,
+        -0.02818,
+        0.64883
+      ],
+      "length": 0.54408
+    },
+    {
+      "name": "Back",
+      "parent": "Body",
+      "head": [
+        0.0,
+        0.23529,
+        0.45661
+      ],
+      "tail": [
+        0.0,
+        0.16584,
+        0.42876
+      ],
+      "length": 0.07483
+    },
+    {
+      "name": "Torso",
+      "parent": "Back",
+      "head": [
+        0.0,
+        0.15307,
+        0.42364
+      ],
+      "tail": [
+        0.0,
+        -0.01657,
+        0.34716
+      ],
+      "length": 0.18608
+    },
+    {
+      "name": "Torso2",
+      "parent": "Torso",
+      "head": [
+        0.0,
+        -0.01657,
+        0.34716
+      ],
+      "tail": [
+        0.0,
+        -0.21486,
+        0.34524
+      ],
+      "length": 0.1983
+    },
+    {
+      "name": "Torso3",
+      "parent": "Torso2",
+      "head": [
+        0.0,
+        -0.1234,
+        0.34613
+      ],
+      "tail": [
+        0.0,
+        -0.24454,
+        0.3499
+      ],
+      "length": 0.1212
+    },
+    {
+      "name": "Neck1",
+      "parent": "Torso3",
+      "head": [
+        0.0,
+        -0.24454,
+        0.3499
+      ],
+      "tail": [
+        0.0,
+        -0.26255,
+        0.36004
+      ],
+      "length": 0.02067
+    },
+    {
+      "name": "Neck2",
+      "parent": "Neck1",
+      "head": [
+        0.0,
+        -0.26255,
+        0.36004
+      ],
+      "tail": [
+        0.0,
+        -0.2864,
+        0.36729
+      ],
+      "length": 0.02493
+    },
+    {
+      "name": "Neck3",
+      "parent": "Neck2",
+      "head": [
+        0.0,
+        -0.2864,
+        0.36729
+      ],
+      "tail": [
+        0.0,
+        -0.3168,
+        0.37764
+      ],
+      "length": 0.03212
+    },
+    {
+      "name": "Head",
+      "parent": "Neck3",
+      "head": [
+        0.0,
+        -0.3168,
+        0.37764
+      ],
+      "tail": [
+        0.0,
+        -0.3447,
+        0.3512
+      ],
+      "length": 0.03843
+    },
+    {
+      "name": "Head_end",
+      "parent": "Head",
+      "head": [
+        0.0,
+        -0.3447,
+        0.3512
+      ],
+      "tail": [
+        0.0,
+        -0.3726,
+        0.32476
+      ],
+      "length": 0.03843
+    },
+    {
+      "name": "FrontShoulder_L",
+      "parent": "Torso2",
+      "head": [
+        0.04748,
+        -0.24927,
+        0.29106
+      ],
+      "tail": [
+        0.25298,
+        -0.22966,
+        0.29405
+      ],
+      "length": 0.20646
+    },
+    {
+      "name": "FrontUpperLeg_L",
+      "parent": "FrontShoulder_L",
+      "head": [
+        0.25298,
+        -0.22966,
+        0.29405
+      ],
+      "tail": [
+        0.25298,
+        -0.23952,
+        0.13534
+      ],
+      "length": 0.15902
+    },
+    {
+      "name": "FrontLowerLeg_L",
+      "parent": "FrontUpperLeg_L",
+      "head": [
+        0.25298,
+        -0.23952,
+        0.13534
+      ],
+      "tail": [
+        0.25298,
+        -0.22871,
+        0.0452
+      ],
+      "length": 0.09079
+    },
+    {
+      "name": "FrontLowerLeg_L_end",
+      "parent": "FrontLowerLeg_L",
+      "head": [
+        0.25298,
+        -0.22871,
+        0.0452
+      ],
+      "tail": [
+        0.25298,
+        -0.21791,
+        -0.04494
+      ],
+      "length": 0.09079
+    },
+    {
+      "name": "FrontShoulder_R",
+      "parent": "Torso2",
+      "head": [
+        -0.04748,
+        -0.24927,
+        0.29106
+      ],
+      "tail": [
+        -0.1768,
+        -0.24745,
+        0.29406
+      ],
+      "length": 0.12937
+    },
+    {
+      "name": "FrontUpperLeg_R",
+      "parent": "FrontShoulder_R",
+      "head": [
+        -0.1768,
+        -0.24745,
+        0.29406
+      ],
+      "tail": [
+        -0.1768,
+        -0.25731,
+        0.13534
+      ],
+      "length": 0.15902
+    },
+    {
+      "name": "FrontLowerLeg_R",
+      "parent": "FrontUpperLeg_R",
+      "head": [
+        -0.1768,
+        -0.25731,
+        0.13534
+      ],
+      "tail": [
+        -0.1768,
+        -0.24651,
+        0.0452
+      ],
+      "length": 0.09079
+    },
+    {
+      "name": "FrontLowerLeg_R_end",
+      "parent": "FrontLowerLeg_R",
+      "head": [
+        -0.1768,
+        -0.24651,
+        0.0452
+      ],
+      "tail": [
+        -0.1768,
+        -0.2357,
+        -0.04494
+      ],
+      "length": 0.09079
+    },
+    {
+      "name": "BackShoulder_L",
+      "parent": "Back",
+      "head": [
+        0.02754,
+        0.19573,
+        0.36291
+      ],
+      "tail": [
+        0.28564,
+        0.24998,
+        0.36599
+      ],
+      "length": 0.26376
+    },
+    {
+      "name": "BackLeg_L",
+      "parent": "BackShoulder_L",
+      "head": [
+        0.28564,
+        0.24998,
+        0.36599
+      ],
+      "tail": [
+        0.28636,
+        0.2148,
+        0.25304
+      ],
+      "length": 0.11831
+    },
+    {
+      "name": "BackUpperLeg_L",
+      "parent": "BackLeg_L",
+      "head": [
+        0.28636,
+        0.2148,
+        0.25304
+      ],
+      "tail": [
+        0.28521,
+        0.31733,
+        0.15218
+      ],
+      "length": 0.14383
+    },
+    {
+      "name": "BackLowerLeg_L",
+      "parent": "BackUpperLeg_L",
+      "head": [
+        0.28521,
+        0.31733,
+        0.15218
+      ],
+      "tail": [
+        0.28565,
+        0.30206,
+        0.0452
+      ],
+      "length": 0.10807
+    },
+    {
+      "name": "BackLowerLeg_L_end",
+      "parent": "BackLowerLeg_L",
+      "head": [
+        0.28565,
+        0.30206,
+        0.0452
+      ],
+      "tail": [
+        0.28609,
+        0.28679,
+        -0.06178
+      ],
+      "length": 0.10807
+    },
+    {
+      "name": "BackShoulder_R",
+      "parent": "Back",
+      "head": [
+        -0.02754,
+        0.19573,
+        0.36291
+      ],
+      "tail": [
+        -0.36182,
+        0.12108,
+        0.36599
+      ],
+      "length": 0.34253
+    },
+    {
+      "name": "BackLeg_R",
+      "parent": "BackShoulder_R",
+      "head": [
+        -0.36182,
+        0.12108,
+        0.36599
+      ],
+      "tail": [
+        -0.36254,
+        0.0859,
+        0.25304
+      ],
+      "length": 0.11831
+    },
+    {
+      "name": "BackUpperLeg_R",
+      "parent": "BackLeg_R",
+      "head": [
+        -0.36254,
+        0.0859,
+        0.25304
+      ],
+      "tail": [
+        -0.36139,
+        0.18843,
+        0.15218
+      ],
+      "length": 0.14383
+    },
+    {
+      "name": "BackLowerLeg_R",
+      "parent": "BackUpperLeg_R",
+      "head": [
+        -0.36139,
+        0.18843,
+        0.15218
+      ],
+      "tail": [
+        -0.36183,
+        0.17316,
+        0.0452
+      ],
+      "length": 0.10807
+    },
+    {
+      "name": "BackLowerLeg_R_end",
+      "parent": "BackLowerLeg_R",
+      "head": [
+        -0.36183,
+        0.17316,
+        0.0452
+      ],
+      "tail": [
+        -0.36227,
+        0.15789,
+        -0.06178
+      ],
+      "length": 0.10807
+    },
+    {
+      "name": "Tail1",
+      "parent": "Back",
+      "head": [
+        0.0,
+        0.23529,
+        0.45661
+      ],
+      "tail": [
+        0.0,
+        0.24463,
+        0.46179
+      ],
+      "length": 0.01068
+    },
+    {
+      "name": "Tail2",
+      "parent": "Tail1",
+      "head": [
+        0.0,
+        0.24463,
+        0.46179
+      ],
+      "tail": [
+        0.0,
+        0.25223,
+        0.45619
+      ],
+      "length": 0.00943
+    },
+    {
+      "name": "Tail3",
+      "parent": "Tail2",
+      "head": [
+        0.0,
+        0.25223,
+        0.45619
+      ],
+      "tail": [
+        0.0,
+        0.25694,
+        0.44226
+      ],
+      "length": 0.01471
+    },
+    {
+      "name": "Tail4",
+      "parent": "Tail3",
+      "head": [
+        0.0,
+        0.25694,
+        0.44226
+      ],
+      "tail": [
+        0.0,
+        0.25616,
+        0.43154
+      ],
+      "length": 0.01074
+    },
+    {
+      "name": "Tail5",
+      "parent": "Tail4",
+      "head": [
+        0.0,
+        0.25616,
+        0.43154
+      ],
+      "tail": [
+        0.0,
+        0.25576,
+        0.41964
+      ],
+      "length": 0.01191
+    },
+    {
+      "name": "Tail6",
+      "parent": "Tail5",
+      "head": [
+        0.0,
+        0.25576,
+        0.41964
+      ],
+      "tail": [
+        0.0,
+        0.25633,
+        0.40281
+      ],
+      "length": 0.01684
+    },
+    {
+      "name": "Tail7",
+      "parent": "Tail6",
+      "head": [
+        0.0,
+        0.25633,
+        0.40281
+      ],
+      "tail": [
+        0.0,
+        0.25676,
+        0.39604
+      ],
+      "length": 0.00679
+    },
+    {
+      "name": "Tail7_end",
+      "parent": "Tail7",
+      "head": [
+        0.0,
+        0.25676,
+        0.39604
+      ],
+      "tail": [
+        0.0,
+        0.25719,
+        0.38926
+      ],
+      "length": 0.00679
+    }
+  ],
+  "mesh": {
+    "triangles": 29034,
+    "vertices": 14497,
+    "material": "M_MushroomCup",
+    "loose_parts": {
+      "islands": 1,
+      "removed_islands": 0,
+      "removed_faces": 0,
+      "removed_stray_verts": 0
+    }
+  },
+  "weights": {
+    "unweighted": 0,
+    "max_influences": 4
+  },
+  "settings": {
+    "yaw": 0.0,
+    "zb": 0.28,
+    "scale": 1.0
+  }
+}
