@@ -6,6 +6,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "TSCBuilders.h"
 #include "TSCUnit.h"
+#include "TSCNav.h"
 #include "TSCGameMode.generated.h"
 
 class ATSCPrimActor;
@@ -211,7 +212,10 @@ public:
 	float PhaseFrac() const;
 
 	// ----- services for units -----------------------------------------------------------------------------------------
-	bool FindPath(const FVector& From, const FVector& To, TArray<FVector>& Out) const;
+	bool FindPath(const FVector& From, const FVector& To, TArray<FVector>& Out, int32 Layer = 0) const;
+	const FTSCNavGrid& GetNav() const { return Nav; }
+	/** Sidestep steering: Dir (2D unit) bent away from other units just ahead of U at Me. Returns a 2D unit vector. */
+	FVector SteerAround(const ATSCUnit* U, const FVector& Me, const FVector& Dir) const;
 	ATSCPrimActor* ReserveTimber(ATSCUnit* Worker, FVector& OutSpot);
 	bool ValidateTimber(ATSCUnit* Worker, ATSCPrimActor* Tree, FVector& OutSpot) const;
 	/** Returns 1 after felling, 2 after removing, 0 for an invalid claim. No resource award here. */
@@ -250,6 +254,9 @@ public:
 	/** Test helper: press CUT!, select a take (0/1) and optionally confirm. */
 	UFUNCTION(Exec)
 	void TSCCut(int32 Take, int32 bConfirm);
+	/** Dev-only: logs the nav check counters (units that entered blocked cells, deep unit overlaps). */
+	UFUNCTION(Exec)
+	void TSCNavStats();
 
 	static constexpr int32 GW = 34;
 	static constexpr int32 GH = 24;
@@ -274,8 +281,6 @@ private:
 	void SetBlocked(int32 Cx, int32 Cy, bool bBlock);
 	void BlockRect(int32 Cx, int32 Cy, int32 W, int32 H, bool bBlock = true);
 	FIntPoint WorldToCell(const FVector& P) const;
-	FIntPoint NearestFree(FIntPoint C) const;
-	bool LineFree(const FVector& A, const FVector& B) const;
 
 	// flow
 	void SimDay(float Dt);
@@ -331,6 +336,20 @@ private:
 	/** The fence outside the wall (along the road from the gate), nearest to the gate first, with its level scale. Built at the end of the prologue. */
 	UPROPERTY() TArray<TObjectPtr<AActor>> ProRoadFence;
 	TArray<FVector> ProRoadFenceScale;
+	/** Every visible level prop (static mesh actors and /Game/Props/ Blueprints), baked into the nav grid as obstacles. */
+	UPROPERTY() TArray<TObjectPtr<AActor>> NavPropActors;
+	void BakeNavProps();
+	/** Soft unit separation: overlapping units are pushed apart through the nav grid. Runs after all Sim calls. */
+	void SeparateUnits(float Dt);
+	/** Dev checks (tsc.NavCheck, tsc.NavDebug, TSCAuto NAVTEST). */
+	void CheckNav();
+	void DrawNavDebug();
+	void TestNav();
+	int32 NavViolations = 0;
+	int32 NavDeepOverlaps = 0;
+	float NavMaxPen = 0.f;
+	int32 NavCheckVersion = -1;
+	float NavStatsTime = 0.f;
 	UPROPERTY() TArray<TObjectPtr<ATSCPrimActor>> ProTrees;
 	TArray<float> ProTreeFell;      // time each tree starts to fall
 	TArray<float> ProTreeYaw;       // direction it falls in
@@ -345,6 +364,7 @@ private:
 	float ProCamArm = 16500.f;
 
 	TArray<uint8> Blocked;
+	FTSCNavGrid Nav;
 	UPROPERTY()
 	TArray<TObjectPtr<ATSCPrimActor>> Prims;
 	TArray<FTSCEmber> Embers;

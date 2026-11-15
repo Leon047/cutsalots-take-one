@@ -8,6 +8,7 @@
 #include "Components/PostProcessComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -127,6 +128,12 @@ namespace
 	const float DefaultCamArm = 16500.f;
 	TAutoConsoleVariable<int32> CVarPrologue(TEXT("tsc.Prologue"), 1,
 		TEXT("0: the title screen shows the finished village instead of the landfall prologue (also -NoPrologue)."));
+#if !UE_BUILD_SHIPPING
+	TAutoConsoleVariable<int32> CVarNavCheck(TEXT("tsc.NavCheck"), 1,
+		TEXT("1: counts units that step into a blocked nav cell (see [Nav] STATS in the log)."));
+	TAutoConsoleVariable<int32> CVarNavDebug(TEXT("tsc.NavDebug"), 0,
+		TEXT("1: draws the nav grid, unit radii and paths."));
+#endif
 }
 
 ATSCGameMode::ATSCGameMode()
@@ -178,11 +185,9 @@ FIntPoint ATSCGameMode::WorldToCell(const FVector& P) const
 
 void ATSCGameMode::SetBlocked(int32 Cx, int32 Cy, bool bBlock)
 {
-	if (InGrid(Cx, Cy))
-	{
-		Blocked[Cy * GW + Cx] = bBlock ? 1 : 0;
-		++GridVersion;
-	}
+	if (InGrid(Cx, Cy)) { Blocked[Cy * GW + Cx] = bBlock ? 1 : 0; }
+	Nav.SetCoarse(Cx, Cy, bBlock); // also the margin outside the grid (forest edge trees, wall arcs)
+	++GridVersion;
 }
 
 void ATSCGameMode::BlockRect(int32 Cx, int32 Cy, int32 W, int32 H, bool bBlock)
@@ -190,108 +195,88 @@ void ATSCGameMode::BlockRect(int32 Cx, int32 Cy, int32 W, int32 H, bool bBlock)
 	for (int32 X = Cx; X < Cx + W; ++X) { for (int32 Y = Cy; Y < Cy + H; ++Y) { SetBlocked(X, Y, bBlock); } }
 }
 
-FIntPoint ATSCGameMode::NearestFree(FIntPoint C) const
+bool ATSCGameMode::FindPath(const FVector& From, const FVector& To, TArray<FVector>& Out, int32 Layer) const
 {
-	C.X = FMath::Clamp(C.X, 0, GW - 1);
-	C.Y = FMath::Clamp(C.Y, 0, GH - 1);
-	if (!IsBlocked(C.X, C.Y)) { return C; }
-	for (int32 R = 1; R < 8; ++R)
+	return Nav.FindPath(From, To, Out, Layer);
+}
+
+/** Units that take part in separation and steering: alive, on the map, visible. */
+static bool TSCIsNavActive(const ATSCUnit* U)
+{
+	return U && U->IsAlive() && !U->bSheltered && !U->IsHidden();
+}
+
+void ATSCGameMode::SeparateUnits(float Dt)
+{
+	TArray<ATSCUnit*, TInlineAllocator<64>> Act;
+	for (ATSCUnit* U : Units) { if (TSCIsNavActive(U)) { Act.Add(U); } }
+	for (ATSCUnit* U : Wildlife) { if (TSCIsNavActive(U)) { Act.Add(U); } }
+	const int32 N = Act.Num();
+	if (N < 2) { return; }
+	TArray<FVector, TInlineAllocator<64>> Push;
+	Push.Init(FVector::ZeroVector, N);
+	TArray<FVector, TInlineAllocator<64>> Pos;
+	Pos.SetNum(N);
+	for (int32 I = 0; I < N; ++I) { Pos[I] = Act[I]->Loc2D(); }
+	for (int32 I = 0; I < N; ++I)
 	{
-		FIntPoint Best = C;
-		int32 BestD = MAX_int32;
-		for (int32 Dx = -R; Dx <= R; ++Dx)
+		const ATSCUnit* A = Act[I];
+		for (int32 J = I + 1; J < N; ++J)
 		{
-			for (int32 Dy = -R; Dy <= R; ++Dy)
+			const ATSCUnit* B = Act[J];
+			const float Min = A->NavRadius + B->NavRadius;
+			const FVector V = Pos[J] - Pos[I];
+			const float D = V.Size2D();
+			if (D >= Min) { continue; }
+			const FVector Nrm = D < 1.f ? FVector(FMath::Cos(I * 2.4f), FMath::Sin(I * 2.4f), 0.f) : FVector(V.X / D, V.Y / D, 0.f);
+			const float Pen = Min - D;
+			if (A->bDowned && B->bDowned) { continue; } // neither may move
+			if (A->bDowned) { Push[J] += Nrm * Pen; }
+			else if (B->bDowned) { Push[I] -= Nrm * Pen; }
+			else
 			{
-				if (!IsBlocked(C.X + Dx, C.Y + Dy) && Dx * Dx + Dy * Dy < BestD)
-				{
-					BestD = Dx * Dx + Dy * Dy;
-					Best = FIntPoint(C.X + Dx, C.Y + Dy);
-				}
+				Push[I] -= Nrm * (0.5f * Pen);
+				Push[J] += Nrm * (0.5f * Pen);
 			}
 		}
-		if (BestD != MAX_int32) { return Best; }
 	}
-	return C;
+	const float Rate = FMath::Min(1.f, 12.f * Dt);
+	const float Cap = 240.f * Dt;
+	for (int32 I = 0; I < N; ++I)
+	{
+		if (Push[I].IsNearlyZero()) { continue; }
+		FVector Delta = Push[I] * Rate;
+		Delta.Z = 0.f;
+		if (Delta.Size2D() > Cap) { Delta = Delta.GetSafeNormal2D() * Cap; }
+		Act[I]->Nudge(Delta);
+	}
 }
 
-bool ATSCGameMode::LineFree(const FVector& A, const FVector& B) const
+FVector ATSCGameMode::SteerAround(const ATSCUnit* U, const FVector& Me, const FVector& Dir) const
 {
-	const float Len = FVector::Dist2D(A, B);
-	const int32 Steps = FMath::Max(1, FMath::CeilToInt(Len / 40.f));
-	const FVector Side = FVector(-(B - A).Y, (B - A).X, 0.f).GetSafeNormal() * 34.f;
-	for (int32 I = 0; I <= Steps; ++I)
+	const FVector Perp(-Dir.Y, Dir.X, 0.f);
+	const ATSCUnit* Tgt = U->Target.Get();
+	const ATSCUnit* Lead = U->Leader.Get();
+	float Sum = 0.f;
+	auto Consider = [&](const ATSCUnit* O)
 	{
-		const FVector P = FMath::Lerp(A, B, I / (float)Steps);
-		for (int32 S = -1; S <= 1; ++S)
-		{
-			const FIntPoint C = WorldToCell(P + Side * S);
-			if (IsBlocked(C.X, C.Y)) { return false; }
-		}
-	}
-	return true;
-}
-
-bool ATSCGameMode::FindPath(const FVector& From, const FVector& To, TArray<FVector>& Out) const
-{
-	Out.Reset();
-	const FIntPoint RawGoal = WorldToCell(To);
-	const FIntPoint Start = NearestFree(WorldToCell(From));
-	const FIntPoint Goal = NearestFree(RawGoal);
-	const bool bGoalExact = Goal == RawGoal;
-
-	TArray<int32> Parent;
-	Parent.Init(-2, GW * GH);
-	TArray<int32> Queue;
-	Queue.Reserve(GW * GH);
-	const int32 StartIdx = Start.Y * GW + Start.X;
-	const int32 GoalIdx = Goal.Y * GW + Goal.X;
-	Parent[StartIdx] = -1;
-	Queue.Add(StartIdx);
-	static const int32 Dx[4] = { 1, -1, 0, 0 };
-	static const int32 Dy[4] = { 0, 0, 1, -1 };
-	for (int32 Head = 0; Head < Queue.Num() && Parent[GoalIdx] == -2; ++Head)
-	{
-		const int32 Cur = Queue[Head];
-		const int32 Cx = Cur % GW, Cy = Cur / GW;
-		for (int32 D = 0; D < 4; ++D)
-		{
-			const int32 Nx = Cx + Dx[D], Ny = Cy + Dy[D];
-			if (IsBlocked(Nx, Ny)) { continue; }
-			const int32 N = Ny * GW + Nx;
-			if (Parent[N] != -2) { continue; }
-			Parent[N] = Cur;
-			Queue.Add(N);
-		}
-	}
-	if (Parent[GoalIdx] == -2)
-	{
-		return false;
-	}
-	TArray<FVector> Cells;
-	for (int32 Cur = GoalIdx; Cur != -1; Cur = Parent[Cur])
-	{
-		Cells.Insert(CellCenter(Cur % GW, Cur / GW), 0);
-	}
-	if (bGoalExact) { Cells.Add(FVector(To.X, To.Y, 0.f)); }
-
-	// String pulling: skip waypoints while the straight line stays on free cells.
-	FVector Cur(From.X, From.Y, 0.f);
-	const FIntPoint FromCell = WorldToCell(From);
-	if (IsBlocked(FromCell.X, FromCell.Y)) { Out.Add(Cells[0]); Cur = Cells[0]; }
-	int32 I = 0;
-	while (I < Cells.Num())
-	{
-		int32 Far = I;
-		for (int32 J = Cells.Num() - 1; J > I; --J)
-		{
-			if (LineFree(Cur, Cells[J])) { Far = J; break; }
-		}
-		Out.Add(Cells[Far]);
-		Cur = Cells[Far];
-		I = Far + 1;
-	}
-	return true;
+		if (O == U || O == Tgt || O == Lead || !TSCIsNavActive(O)) { return; }
+		const FVector V = O->Loc2D() - Me;
+		const float D = V.Size2D();
+		const float R = U->NavRadius + O->NavRadius;
+		if (D > R + 60.f || D < 1.f) { return; }
+		const float Ahead = V.X * Dir.X + V.Y * Dir.Y;
+		if (Ahead <= 0.f) { return; }
+		const float Lat = V.X * Perp.X + V.Y * Perp.Y;
+		if (FMath::Abs(Lat) > R + 10.f) { return; }
+		const float W = 1.f - FMath::Clamp((D - R) / 60.f, 0.f, 1.f);
+		const float Side = Lat > 4.f ? -1.f : 1.f; // obstacle on +Perp: go -Perp; dead ahead: +Perp, so head-on walkers pass
+		Sum += Side * W * 1.2f;
+	};
+	for (const ATSCUnit* O : Units) { Consider(O); }
+	for (const ATSCUnit* O : Wildlife) { Consider(O); }
+	const FVector Out = (Dir + Perp * FMath::Clamp(Sum, -1.5f, 1.5f)).GetSafeNormal2D();
+	return Out.IsNearlyZero() ? Dir : Out;
 }
 
 bool ATSCGameMode::CanReach(const ATSCUnit* A, const ATSCUnit* B) const
@@ -474,6 +459,15 @@ void ATSCGameMode::BuildAtmosphere()
 void ATSCGameMode::BuildWorld()
 {
 	Blocked.Init(0, GW * GH);
+	Nav.Init(GW, GH, CELL);
+	// Margin outside the grid: open only west of the settlement's middle and outside the wall curve (forest animals live there).
+	for (int32 Y = -FTSCNavGrid::PadN; Y < GH + FTSCNavGrid::PadS; ++Y)
+	{
+		for (int32 X = -FTSCNavGrid::PadW; X < GW + FTSCNavGrid::PadE; ++X)
+		{
+			if (!InGrid(X, Y) && (X >= 19 || WallShape(X + 0.5f, Y + 0.5f) < 1.f)) { Nav.SetCoarse(X, Y, true); }
+		}
+	}
 
 	// ----- continuous ground and trail network -----
 	{
@@ -546,6 +540,7 @@ void ATSCGameMode::BuildWorld()
 			BuildTree(T, X * 57 + Y * 13, true);
 			T->Refresh();
 			SetBlocked(X, Y, true);
+			if (InGrid(X, Y) || X < 19) { Nav.SetTree(X, Y, T->GetActorLocation()); } // the east margin stays fully blocked
 			if ((bForest || bGroveTree) && InGrid(X, Y))
 			{
 				FTSCTimberTree& Tree = TimberTrees.AddDefaulted_GetRef();
@@ -637,6 +632,7 @@ void ATSCGameMode::BuildWorld()
 		Stump->Refresh();
 	}
 	SetBlocked(TreeX, TreeY, true);
+	Nav.SetTree(TreeX, TreeY, CellCenter(TreeX, TreeY));
 
 	// ----- constructions -----
 	TArray<FBox2D> GroundExclusions;
@@ -781,6 +777,7 @@ void ATSCGameMode::BuildWorld()
 			return X < WallEndX && WallShape(X, P.Y / CELL + GH / 2) < 1.f;
 		});
 
+	BakeNavProps();
 	// ----- people -----
 	Hunter = SpawnUnit(ETSCRole::Hunter, TEXT("Hakon the Hunter"), CellF(9.6f, 12.f));
 	Woodcutter = SpawnUnit(ETSCRole::Woodcutter, TEXT("Ulf the Woodcutter"), CellF(11.5f, 6.6f));
@@ -867,6 +864,7 @@ void ATSCGameMode::CollectLevelProps()
 			const UStaticMesh* Mesh = SM->GetStaticMeshComponent() ? SM->GetStaticMeshComponent()->GetStaticMesh() : nullptr;
 			if (!Mesh || Mesh->GetPathName().Contains(TEXT("Mushroom"))) { continue; }  // mushrooms belong to the forest
 		}
+		NavPropActors.Add(A);
 		const FVector P = A->GetActorLocation();
 		if (SM && SM->GetStaticMeshComponent() && SM->GetStaticMeshComponent()->GetStaticMesh()
 			&& SM->GetStaticMeshComponent()->GetStaticMesh()->GetName().Contains(TEXT("SM_Altar")))
@@ -892,6 +890,95 @@ void ATSCGameMode::CollectLevelProps()
 		UE_LOG(LogSaga, Warning, TEXT("[Saga] No stone altar (SM_Altar) found in the level, praying at a default spot"));
 	}
 	UE_LOG(LogSaga, Display, TEXT("[Saga] Prologue: %d level props inside the wall, %d road fence pieces"), ProLevelProps.Num(), ProRoadFence.Num());
+}
+
+void ATSCGameMode::BakeNavProps()
+{
+	// Points the scene scripts and orders walk to: a prop must never cut them off.
+	const FVector KeyPoints[] = {
+		HallDoor(), CellF(10.4f, 10.5f), CellF(14.4f, 20.3f), CellF(18.f, 14.6f), CellF(17.f, 14.4f), CellF(9.9f, 12.f),
+		CellF(7.5f, 12.f), CellF(3.5f, 12.f), CellF(0.5f, 12.f), CellF(26.4f, 12.f), CellF(31.5f, 12.f)
+	};
+	constexpr int32 NumKeys = UE_ARRAY_COUNT(KeyPoints);
+	auto KeyFine = [this, &KeyPoints](const TArray<float>& Cost, int32 K)
+	{
+		return Nav.CostAt(Cost, KeyPoints[K]) < MAX_flt && !Nav.IsBlockedAt(KeyPoints[K], TSCNavLayer::People);
+	};
+	TArray<float> Cost;
+	Nav.Flood(HallDoor(), TSCNavLayer::People, Cost);
+	bool bBaseline[NumKeys];
+	for (int32 K = 0; K < NumKeys; ++K) { bBaseline[K] = KeyFine(Cost, K); }
+
+	int32 NumActors = 0, NumIgnored = 0;
+	for (AActor* A : NavPropActors)
+	{
+		if (!A) { continue; }
+		TArray<UStaticMeshComponent*> Comps;
+		A->GetComponents<UStaticMeshComponent>(Comps);
+		// garden crops are walked through
+		bool bCrop = false;
+		for (const UStaticMeshComponent* C : Comps)
+		{
+			const UStaticMesh* Mesh = C ? C->GetStaticMesh() : nullptr;
+			if (Mesh && (Mesh->GetPathName().Contains(TEXT("VegetablePlant")) || Mesh->GetPathName().Contains(TEXT("VegetableSprout")))) { bCrop = true; break; }
+		}
+		if (bCrop) { continue; }
+
+		TArray<int32> Added;
+		if (!Cast<AStaticMeshActor>(A) && !IsFenceProp(A))
+		{
+			// torches, banners, braziers: poles with wide overhead bounds; only the foot blocks
+			const float Radius = A->GetClass()->GetPathName().Contains(TEXT("Brazier")) ? 40.f : 30.f;
+			Added.Add(Nav.AddPropDisc(FVector2D(A->GetActorLocation()), Radius));
+		}
+		else
+		{
+			for (const UStaticMeshComponent* C : Comps)
+			{
+				const UStaticMesh* Mesh = C ? C->GetStaticMesh() : nullptr;
+				if (!Mesh || !C->IsVisible()) { continue; }
+				if (C->Bounds.Origin.Z - C->Bounds.BoxExtent.Z > GroundReliefAt(C->Bounds.Origin) + 140.f) { continue; } // hangs overhead
+				const FBox LB = Mesh->GetBoundingBox();
+				const FTransform T = C->GetComponentTransform();
+				const FVector Center = T.TransformPosition(LB.GetCenter());
+				FVector2D AxisX(1.f, 0.f);
+				FVector2D Half;
+				if (FMath::Abs(T.GetUnitAxis(EAxis::Z).Z) < 0.8f)
+				{
+					// tilted or lying prop: its world bounds
+					Half = FVector2D(C->Bounds.BoxExtent.X, C->Bounds.BoxExtent.Y);
+				}
+				else
+				{
+					const FVector WX = T.GetUnitAxis(EAxis::X);
+					AxisX = FVector2D(WX.X, WX.Y).GetSafeNormal();
+					if (AxisX.IsNearlyZero()) { AxisX = FVector2D(1.f, 0.f); }
+					const FVector Scale = T.GetScale3D();
+					Half = FVector2D(LB.GetExtent().X * FMath::Abs(Scale.X), LB.GetExtent().Y * FMath::Abs(Scale.Y));
+				}
+				Half.X = FMath::Max(Half.X + 10.f, 15.f);
+				Half.Y = FMath::Max(Half.Y + 10.f, 15.f);
+				Added.Add(Nav.AddPropBox(FVector2D(Center), AxisX, Half));
+			}
+		}
+		if (Added.IsEmpty()) { continue; }
+		++NumActors;
+
+		// guard: a prop that cuts off a key point is left out
+		Nav.Flood(HallDoor(), TSCNavLayer::People, Cost);
+		bool bBreaks = false;
+		for (int32 K = 0; K < NumKeys && !bBreaks; ++K) { bBreaks = bBaseline[K] && !KeyFine(Cost, K); }
+		if (bBreaks)
+		{
+			for (const int32 Idx : Added) { Nav.SetPropEnabled(Idx, false); }
+			++NumIgnored;
+			UE_LOG(LogSaga, Warning, TEXT("[Nav] prop %s ignored: it would block a key point"), *A->GetName());
+		}
+	}
+	int32 NumObstacles = 0;
+	for (int32 I = 0; I < Nav.NumProps(); ++I) { if (Nav.IsPropEnabled(I)) { ++NumObstacles; } }
+	++GridVersion;
+	UE_LOG(LogSaga, Display, TEXT("[Nav] props: %d obstacles from %d level actors, %d actors ignored"), NumObstacles, NumActors, NumIgnored);
 }
 
 void ATSCGameMode::BuildPrologueExtras()
@@ -982,6 +1069,8 @@ void ATSCGameMode::StartPrologue()
 		Units[I]->Teleport(ShipMooring);
 		Units[I]->SetActorHiddenInGame(true);
 	}
+	Nav.SetPropsActive(false); // the level props are hidden until the village is built
+	++GridVersion;
 	ProCamLoc = CellF(25.5f, 13.f);
 	ProCamArm = 10500.f;
 	SetCameraView(ProCamLoc, ProCamArm);
@@ -1021,6 +1110,7 @@ void ATSCGameMode::EndPrologue()
 	for (ATSCPrimActor* T : ProTrees) { T->SetActorHiddenInGame(true); }
 	for (ATSCUnit* W : ProWatchers) { W->SetActorHiddenInGame(true); }
 	ResetVillagers();
+	Nav.SetPropsActive(true);
 	++GridVersion;  // everyone plans a fresh path from home
 	SetCameraView(CellF(17.f, 12.f), DefaultCamArm);
 	PlayMusic(MenuMusic);
@@ -1102,6 +1192,7 @@ void ATSCGameMode::SimPrologue(float Dt)
 		PlayMusic(NightMusic);
 	}
 	for (int32 I = 0; I < ProLanded; ++I) { Units[I]->Sim(Dt); }
+	SeparateUnits(Dt);
 
 	// ----- the trees come down -----
 	for (int32 I = 0; I < ProTrees.Num(); ++I)
@@ -1282,8 +1373,15 @@ void ATSCGameMode::Tick(float DeltaSeconds)
 			SimTimber(Dt);
 			for (int32 I = 0; I < Units.Num(); ++I) { if (Units[I]) { Units[I]->Sim(Dt); } }
 			for (ATSCUnit* A : Wildlife) { if (A && !A->IsHidden()) { A->Sim(Dt); } } // hidden = not arrived yet (prologue)
+			SeparateUnits(Dt);
+#if !UE_BUILD_SHIPPING
+			if (CVarNavCheck.GetValueOnGameThread() != 0) { CheckNav(); }
+#endif
 		}
 	}
+#if !UE_BUILD_SHIPPING
+	if (CVarNavDebug.GetValueOnGameThread() != 0) { DrawNavDebug(); }
+#endif
 	{
 		FTSCOceanInput In;
 		In.Time = WorldTime;
@@ -2468,7 +2566,13 @@ void ATSCGameMode::SimNight(float Dt)
 	}
 
 	const bool bAllSpawned = NightTime > 46.f;
-	if (bAllSpawned && EnemiesAlive == 0 && Once(7, 0.f)) { DayFlags |= 1 << 8; NightTime = FMath::Max(NightTime, NightLength - 3.f); Toast(TEXT("The last of them falls. The night goes quiet.")); }
+	if (bAllSpawned && EnemiesAlive == 0 && Once(7, 0.f))
+	{
+		DayFlags |= 1 << 8; NightTime = FMath::Max(NightTime, NightLength - 3.f); Toast(TEXT("The last of them falls. The night goes quiet."));
+#if !UE_BUILD_SHIPPING
+		TSCNavStats();
+#endif
+	}
 	if (NightTime >= NightLength)
 	{
 		EndNight(false);
@@ -2495,6 +2599,9 @@ void ATSCGameMode::EndNight(bool bHallFell)
 	{
 		PlayMusic(MenuMusic);
 	}
+#if !UE_BUILD_SHIPPING
+	TSCNavStats(); // the 30 s stats timer runs on real time and misses the night
+#endif
 	for (const FString& L : Epilogue) { UE_LOG(LogSaga, Display, TEXT("[Epilogue] %s"), *L); }
 }
 
@@ -2627,6 +2734,7 @@ void ATSCGameMode::TSCAuto(const FString& Takes, const FString& Build, float Spe
 {
 #if !UE_BUILD_SHIPPING
 	if (Takes.Equals(TEXT("TIMBERTEST"), ESearchCase::IgnoreCase)) { TestTimber(); return; }
+	if (Takes.Equals(TEXT("NAVTEST"), ESearchCase::IgnoreCase)) { TestNav(); return; }
 #endif
 	bAuto = true;
 	AutoTakes = Takes.ToUpper();
@@ -2683,6 +2791,8 @@ ATSCPrimActor* ATSCGameMode::ReserveTimber(ATSCUnit* Worker, FVector& OutSpot)
 	if (!IsValid(Worker) || !Worker->IsTimberWorker()) { return nullptr; }
 	FTSCTimberTree* Best = nullptr;
 	float BestCost = MAX_flt;
+	TArray<float> Reach;
+	Nav.Flood(Worker->Loc2D(), TSCNavLayer::People, Reach);
 	for (FTSCTimberTree& T : TimberTrees)
 	{
 		ATSCPrimActor* Tree = T.Tree.Get();
@@ -2700,11 +2810,9 @@ ATSCPrimActor* ATSCGameMode::ReserveTimber(ATSCUnit* Worker, FVector& OutSpot)
 				const FVector Spot = T.Base + FVector(DX * CELL * 0.65f, DY * CELL * 0.65f, 0.f);
 				const FIntPoint C = WorldToCell(Spot);
 				if (IsBlocked(C.X, C.Y)) { continue; }
-				TArray<FVector> Route;
-				if (!FindPath(Worker->Loc2D(), Spot, Route) || Route.IsEmpty() || FVector::Dist2D(Route.Last(), Spot) > 5.f) { continue; }
-				float Cost = 0.f;
-				FVector Prev = Worker->Loc2D();
-				for (const FVector& P : Route) { Cost += FVector::Dist2D(Prev, P); Prev = P; }
+				if (Nav.IsBlockedAt(Spot, TSCNavLayer::People)) { continue; }
+				const float Cost = Nav.CostAt(Reach, Spot);
+				if (Cost >= MAX_flt) { continue; }
 				if (Cost < BestCost) { BestCost = Cost; Best = &T; OutSpot = Spot; }
 			}
 		}
@@ -2875,5 +2983,235 @@ void ATSCGameMode::TestTimber()
 	Check(!B->TimberTarget.IsValid() && !ValidateTimber(B, TB, Dummy), TEXT("death releases claim"));
 	A->Destroy(); B->Destroy();
 	UE_LOG(LogSaga, Display, TEXT("[TimberTest] RESULT passed=%d failed=%d"), Passed, Failed);
+#endif
+}
+
+// =====================================================================================================================
+// Nav dev checks
+// =====================================================================================================================
+
+void ATSCGameMode::TSCNavStats()
+{
+#if !UE_BUILD_SHIPPING
+	UE_LOG(LogSaga, Display, TEXT("[Nav] STATS violations=%d deepOverlaps=%d maxPen=%.0f"), NavViolations, NavDeepOverlaps, NavMaxPen);
+#endif
+}
+
+void ATSCGameMode::CheckNav()
+{
+#if !UE_BUILD_SHIPPING
+	TArray<ATSCUnit*, TInlineAllocator<64>> Act;
+	for (ATSCUnit* U : Units) { if (TSCIsNavActive(U)) { Act.Add(U); } }
+	for (ATSCUnit* U : Wildlife) { if (TSCIsNavActive(U)) { Act.Add(U); } }
+	if (NavCheckVersion != GridVersion)
+	{
+		// The map changed under the units (gate, building, felled timber): not a violation.
+		for (ATSCUnit* U : Act) { U->bNavWasBlocked = Nav.IsBlockedAt(U->Loc2D(), U->NavLayer()); }
+		NavCheckVersion = GridVersion;
+		return;
+	}
+	for (ATSCUnit* U : Act)
+	{
+		const bool bIn = Nav.IsBlockedAt(U->Loc2D(), U->NavLayer());
+		if (bIn && !U->bNavWasBlocked)
+		{
+			++NavViolations;
+			if (NavViolations <= 30)
+			{
+				UE_LOG(LogSaga, Warning, TEXT("[Nav] VIOLATION %s role=%d entered a blocked cell at %s"), *U->GetName(), (int32)U->Role, *U->Loc2D().ToString());
+			}
+		}
+		U->bNavWasBlocked = bIn;
+	}
+	for (int32 I = 0; I < Act.Num(); ++I)
+	{
+		for (int32 J = I + 1; J < Act.Num(); ++J)
+		{
+			const float R = Act[I]->NavRadius + Act[J]->NavRadius;
+			const float D = FVector::Dist2D(Act[I]->Loc2D(), Act[J]->Loc2D());
+			if (D < 0.5f * R)
+			{
+				++NavDeepOverlaps;
+				NavMaxPen = FMath::Max(NavMaxPen, R - D);
+			}
+		}
+	}
+	if (WorldTime - NavStatsTime >= 30.f)
+	{
+		NavStatsTime = WorldTime;
+		TSCNavStats();
+	}
+#endif
+}
+
+void ATSCGameMode::DrawNavDebug()
+{
+#if !UE_BUILD_SHIPPING
+	UWorld* World = GetWorld();
+	if (!World) { return; }
+	const int32 W = Nav.Width(), H = Nav.Height();
+	const int32 L = TSCNavLayer::People;
+	for (int32 Y = 0; Y < H; ++Y)
+	{
+		for (int32 X = 0; X < W; ++X)
+		{
+			if (!Nav.IsBlockedCell(X, Y, L)) { continue; }
+			const bool bEdge = !Nav.IsBlockedCell(X + 1, Y, L) || !Nav.IsBlockedCell(X - 1, Y, L) || !Nav.IsBlockedCell(X, Y + 1, L) || !Nav.IsBlockedCell(X, Y - 1, L);
+			if (!bEdge) { continue; }
+			FVector C = Nav.CellCenter(X, Y);
+			C.Z = GroundReliefAt(C) + 20.f;
+			DrawDebugBox(World, C, FVector(24.f, 24.f, 2.f), Nav.IsPropCell(X, Y) ? FColor::Magenta : FColor::Red, false, 0.f);
+		}
+	}
+	auto DrawUnit = [&](const ATSCUnit* U)
+	{
+		if (!TSCIsNavActive(U)) { return; }
+		FVector C = U->Loc2D();
+		C.Z = GroundReliefAt(C) + 20.f;
+		DrawDebugCircle(World, C, U->NavRadius, 24, FColor::White, false, 0.f, 0, 1.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 1.f, 0.f), false);
+		FVector Prev = C;
+		for (int32 I = U->PathIdx; I < U->Path.Num(); ++I)
+		{
+			FVector P = U->Path[I];
+			P.Z = C.Z;
+			DrawDebugLine(World, Prev, P, FColor::Green, false, 0.f);
+			Prev = P;
+		}
+	};
+	for (const ATSCUnit* U : Units) { DrawUnit(U); }
+	for (const ATSCUnit* U : Wildlife) { DrawUnit(U); }
+#endif
+}
+
+void ATSCGameMode::TestNav()
+{
+#if !UE_BUILD_SHIPPING
+	if (Phase == ETSCPhase::Title) { StartGame(); }
+	Phase = ETSCPhase::Day;
+	int32 Passed = 0, Failed = 0;
+	auto Check = [&](bool bOK, const TCHAR* Name)
+	{
+		if (bOK) { ++Passed; } else { ++Failed; }
+		UE_LOG(LogSaga, Display, TEXT("[NavTest] %s %s"), bOK ? TEXT("PASS") : TEXT("FAIL"), Name);
+	};
+	const int32 L = TSCNavLayer::People;
+	auto Run = [&](const TArray<ATSCUnit*>& Us, float Seconds, TFunctionRef<void()> Each)
+	{
+		for (float T = 0.f; T < Seconds; T += 0.05f)
+		{
+			for (ATSCUnit* U : Us) { U->Sim(0.05f); }
+			SeparateUnits(0.05f);
+			Each();
+		}
+	};
+	auto Spawn = [&](const FVector& Pos, const FVector& Goal)
+	{
+		ATSCUnit* U = SpawnUnit(ETSCRole::Worker, TEXT("NavTest"), Pos);
+		U->OrderHold(Goal);
+		return U;
+	};
+	auto Remove = [&](const TArray<ATSCUnit*>& Us)
+	{
+		for (ATSCUnit* U : Us) { Units.Remove(U); U->Destroy(); }
+	};
+
+	// 1. path goes around a building
+	{
+		TArray<FVector> P;
+		const FVector Goal = CellF(23.5f, 6.f);
+		const bool bFound = FindPath(CellF(20.5f, 6.f), Goal, P, L);
+		bool bOK = bFound && P.Num() >= 2 && FVector::Dist2D(P.Last(), Goal) <= 1.f;
+		FVector Prev = CellF(20.5f, 6.f);
+		for (const FVector& Pt : P)
+		{
+			if (Nav.IsBlockedAt(Pt, L) || !Nav.LineFree(Prev, Pt, L))
+			{
+				bOK = false;
+				UE_LOG(LogSaga, Display, TEXT("[NavTest]   leg %s -> %s blockedEnd=%d lineFree=%d"), *Prev.ToString(), *Pt.ToString(), Nav.IsBlockedAt(Pt, L) ? 1 : 0, Nav.LineFree(Prev, Pt, L) ? 1 : 0);
+			}
+			Prev = Pt;
+		}
+		UE_LOG(LogSaga, Display, TEXT("[NavTest]   path found=%d num=%d lastDist=%.1f startBlocked=%d"), bFound ? 1 : 0, P.Num(), P.Num() ? FVector::Dist2D(P.Last(), Goal) : -1.f, Nav.IsBlockedAt(CellF(20.5f, 6.f), L) ? 1 : 0);
+		Check(bOK, TEXT("path goes around a building"));
+	}
+	// 2. blocked goal snaps to free ground
+	{
+		TArray<FVector> P;
+		const FVector Goal = CellF(22.f, 6.f);
+		const bool bFound = FindPath(CellF(20.5f, 6.f), Goal, P, L);
+		Check(bFound && P.Num() > 0 && !Nav.IsBlockedAt(P.Last(), L) && FVector::Dist2D(P.Last(), Goal) <= 250.f, TEXT("blocked goal snaps to free ground"));
+	}
+	// 3. closed gate has no way round
+	{
+		const bool bWasClosed = bGateClosed;
+		if (!bWasClosed) { SetBlocked(GateX, GateY, true); SetBlocked(GateX, GateY + 1, true); }
+		TArray<FVector> P;
+		const bool bFound = FindPath(CellF(10.5f, 12.f), CellF(5.f, 12.f), P, L);
+		Check(!bFound && P.Num() > 0 && IsInsideSettlement(P.Last()), TEXT("closed gate has no way round"));
+		if (!bWasClosed) { SetBlocked(GateX, GateY, false); SetBlocked(GateX, GateY + 1, false); }
+	}
+	// 4. walker never enters a blocked cell
+	{
+		ATSCUnit* U = Spawn(CellF(20.5f, 6.f), CellF(23.5f, 6.f));
+		bool bEntered = false;
+		Run({ U }, 40.f, [&]() { if (Nav.IsBlockedAt(U->Loc2D(), L)) { bEntered = true; } });
+		Check(!bEntered && U->AtHoldPos(), TEXT("walker never enters a blocked cell"));
+		UE_LOG(LogSaga, Display, TEXT("[NavTest]   walker entered=%d atHold=%d pos=%s"), bEntered ? 1 : 0, U->AtHoldPos() ? 1 : 0, *U->Loc2D().ToString());
+		Remove({ U });
+	}
+	// 5. head-on walkers pass
+	{
+		ATSCUnit* A = Spawn(CellF(23.f, 7.6f), CellF(25.4f, 7.6f));
+		ATSCUnit* B = Spawn(CellF(25.4f, 7.6f), CellF(23.f, 7.6f));
+		float MinD = MAX_flt;
+		Run({ A, B }, 25.f, [&]() { MinD = FMath::Min(MinD, FVector::Dist2D(A->Loc2D(), B->Loc2D())); });
+		Check(A->AtHoldPos() && B->AtHoldPos() && MinD >= 28.f, TEXT("head-on walkers pass"));
+		UE_LOG(LogSaga, Display, TEXT("[NavTest]   head-on atHoldA=%d atHoldB=%d minDist=%.1f"), A->AtHoldPos() ? 1 : 0, B->AtHoldPos() ? 1 : 0, MinD);
+		Remove({ A, B });
+	}
+	// 6. six on one spot spread out
+	{
+		TArray<ATSCUnit*> Six;
+		const FVector Spot = CellF(24.2f, 7.6f);
+		for (int32 I = 0; I < 6; ++I) { Six.Add(Spawn(Spot, Spot)); }
+		Run(Six, 8.f, []() {});
+		float MinD = MAX_flt;
+		for (int32 I = 0; I < Six.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < Six.Num(); ++J) { MinD = FMath::Min(MinD, FVector::Dist2D(Six[I]->Loc2D(), Six[J]->Loc2D())); }
+		}
+		Check(MinD >= 40.f, TEXT("six on one spot spread out"));
+		UE_LOG(LogSaga, Display, TEXT("[NavTest]   six minDist=%.1f"), MinD);
+		Remove(Six);
+	}
+	// 7. wildlife passes between trunks
+	{
+		bool bOK = false;
+		for (const FTSCTimberTree& T : TimberTrees)
+		{
+			if (T.Cell.X > 5 || !T.Tree.IsValid() || T.Stage != 0) { continue; }
+			if (!Nav.IsBlockedAt(T.Base, TSCNavLayer::Wildlife)) { continue; }
+			const FVector C = CellCenter(T.Cell.X, T.Cell.Y);
+			for (int32 K = 0; K < 4; ++K)
+			{
+				const FVector P = C + FVector((K & 1) ? 90.f : -90.f, (K & 2) ? 90.f : -90.f, 0.f);
+				if (Nav.IsBlockedAt(P, TSCNavLayer::People) && !Nav.IsBlockedAt(P, TSCNavLayer::Wildlife)) { bOK = true; }
+			}
+			if (bOK) { break; }
+		}
+		Check(bOK, TEXT("wildlife passes between trunks"));
+	}
+	// 8. props are obstacles
+	{
+		bool bOK = Nav.NumProps() > 0;
+		for (int32 I = 0; I < Nav.NumProps(); ++I)
+		{
+			if (!Nav.IsPropEnabled(I)) { continue; }
+			const FVector2D C = Nav.PropCenter(I);
+			if (!Nav.IsBlockedAt(FVector(C.X, C.Y, 0.f), L)) { bOK = false; }
+		}
+		Check(bOK, TEXT("props are obstacles"));
+	}
+	UE_LOG(LogSaga, Display, TEXT("[NavTest] RESULT passed=%d failed=%d"), Passed, Failed);
 #endif
 }

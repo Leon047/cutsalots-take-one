@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "TSCPrimActor.h"
+#include "TSCNav.h"
 #include "TSCUnit.generated.h"
 
 class ATSCGameMode;
@@ -183,6 +184,24 @@ private:
 	int32 PathIdx = 0;
 	FVector PathDest = FVector::ZeroVector;
 	int32 PathVersion = -1;
+	/** Body radius against other units (cm). */
+	float NavRadius = 28.f;
+	int32 NavLayer() const { return IsWildlife() ? TSCNavLayer::Wildlife : TSCNavLayer::People; }
+	/** Moves by Delta (2D) on the nav grid: slides along obstacles, never enters a blocked cell, respects Zone. Returns the distance moved. */
+	float MoveNav(const FVector& Delta, float WallRadius);
+	/** A push from the crowd (unit separation); same rules as MoveNav. */
+	void Nudge(const FVector& Delta);
+	bool bPathOK = false;
+	float RepathCooldown = 0.f;
+	float StuckClock = 0.f;
+	int32 StuckCount = 0;
+	FVector StuckRef = FVector::ZeroVector;
+	float CrowdWait = 0.f;
+	/** The destination CrowdWait was set for; a different destination cancels the wait. */
+	FVector CrowdDest = FVector::ZeroVector;
+	float LastStepTime = -1000.f;
+	/** Dev check (tsc.NavCheck): was inside a blocked nav cell at the last check. */
+	bool bNavWasBlocked = true;
 
 	float AttackTimer = 0.f;
 	float SwingTimer = 0.f;

@@ -227,6 +227,17 @@ void ATSCUnit::Init(ATSCGameMode* InGM, ETSCRole InRole, const FString& InName)
 	case ETSCRole::Cow: Team = ETSCTeam::Animal; MaxHP = 80.f; Damage = 0.f; Speed = 70.f; Height = 140.f; break;
 	case ETSCRole::Bull: Team = ETSCTeam::Animal; MaxHP = 110.f; Damage = 0.f; Speed = 80.f; Height = 150.f; break;
 	}
+	switch (Role)
+	{
+	case ETSCRole::Fox: NavRadius = 18.f; break;
+	case ETSCRole::Husky: NavRadius = 22.f; break;
+	case ETSCRole::Wolf: NavRadius = 26.f; break;
+	case ETSCRole::Creature: case ETSCRole::Boar: case ETSCRole::Deer: NavRadius = 30.f; break;
+	case ETSCRole::Stag: NavRadius = 34.f; break;
+	case ETSCRole::Cow: NavRadius = 40.f; break;
+	case ETSCRole::Bull: NavRadius = 44.f; break;
+	default: NavRadius = 28.f; break; // Worker, Hunter, Woodcutter, Healer, Shield, Raider
+	}
 	BaseSpeed = Speed;
 	HP = MaxHP;
 	BuildFigure();
@@ -988,6 +999,7 @@ void ATSCUnit::Teleport(const FVector& Pos)
 	SetActorLocation(FVector(Pos.X, Pos.Y, GM ? GM->GroundReliefAt(Pos) - GM->WadeDepthAt(FVector(Pos.X, Pos.Y, 0.f)) : 0.f));
 	LastWadePos = GetActorLocation();
 	Path.Reset();
+	bNavWasBlocked = true; StuckCount = 0; CrowdWait = 0.f; PathVersion = -1;
 }
 
 void ATSCUnit::Idle(float Dt)
@@ -1085,44 +1097,98 @@ ATSCUnit* ATSCUnit::FindTarget() const
 	return Best;
 }
 
+float ATSCUnit::MoveNav(const FVector& Delta, float WallRadius)
+{
+	const FVector Loc = GetActorLocation();
+	const FVector From(Loc.X, Loc.Y, 0.f);
+	const FVector To = GM->GetNav().Slide(From, From + FVector(Delta.X, Delta.Y, 0.f), WallRadius, NavLayer());
+	if (Zone != ETSCZone::Free && ZoneAllows(From) && !ZoneAllows(To)) { bZoneBlocked = true; return 0.f; } // the palisade is the limit
+	const float Moved = FVector::Dist2D(From, To);
+	if (Moved > 0.01f) { SetActorLocation(FVector(To.X, To.Y, Loc.Z)); } // keep the wading depth
+	return Moved;
+}
+
+void ATSCUnit::Nudge(const FVector& Delta)
+{
+	const bool bSaved = bZoneBlocked;
+	MoveNav(Delta, FTSCNavGrid::WallRadius);
+	bZoneBlocked = bSaved;
+}
+
 bool ATSCUnit::StepToward(const FVector& Dest, float Dt, float StopDist)
 {
 	bZoneBlocked = false;
 	const FVector Me = Loc2D();
-	if (FVector::Dist2D(Me, Dest) <= StopDist)
+	const float Now = GM->GetWorldTime();
+	if (Now - LastStepTime > 0.25f) { StuckClock = 0.f; StuckCount = 0; StuckRef = Me; } // was not walking: start the stuck watch afresh
+	LastStepTime = Now;
+	const float DestDist = FVector::Dist2D(Me, Dest);
+	if (DestDist <= StopDist)
 	{
+		StuckClock = 0.f; StuckCount = 0; CrowdWait = 0.f; StuckRef = Me;
 		return true;
 	}
-	if (PathVersion != GM->GridVersion || FVector::Dist2D(PathDest, Dest) > 120.f)
+	const FTSCNavGrid& Nav = GM->GetNav();
+	const int32 Layer = NavLayer();
+	RepathCooldown = FMath::Max(0.f, RepathCooldown - Dt);
+	bool bReplan = PathVersion != GM->GridVersion || FVector::Dist2D(PathDest, Dest) > 60.f;
+	// Pushed off the planned line (crowd, wall slide): plan again from here, at most about three times a second.
+	if (!bReplan && RepathCooldown <= 0.f && PathIdx < Path.Num() && Nav.IsFree(Me, 0.f, Layer) && !Nav.LineFree(Me, Path[PathIdx], Layer)) { bReplan = true; }
+	if (bReplan)
 	{
 		Path.Reset();
-		GM->FindPath(Me, Dest, Path);
-		PathIdx = 0;
-		PathDest = Dest;
-		PathVersion = GM->GridVersion;
+		bPathOK = GM->FindPath(Me, Dest, Path, Layer);
+		PathIdx = 0; PathDest = Dest; PathVersion = GM->GridVersion; RepathCooldown = 0.35f;
 	}
-	FVector Next = Dest;
-	while (PathIdx < Path.Num())
+	while (PathIdx < Path.Num() - 1 && FVector::Dist2D(Me, Path[PathIdx]) < 24.f) { ++PathIdx; }
+	// The path ends at the best reachable point (Dest itself whenever Dest is free and reachable): its end is "arrived".
+	if (Path.IsEmpty() || (PathIdx >= Path.Num() - 1 && FVector::Dist2D(Me, Path.Last()) < 12.f))
 	{
-		if (FVector::Dist2D(Me, Path[PathIdx]) < 24.f) { ++PathIdx; continue; }
-		Next = Path[PathIdx];
-		break;
+		StuckClock = 0.f; StuckCount = 0; StuckRef = Me;
+		return true;
 	}
+	// Crowd: others stand where this unit wants to be. Close enough counts for a moment, then it tries again.
+	if (FVector::Dist2D(CrowdDest, Dest) > 60.f) { CrowdWait = 0.f; } // the wait belongs to one destination
+	if (CrowdWait > 0.f) { CrowdWait -= Dt; return true; }
+	StuckClock += Dt;
+	if (StuckClock >= 0.6f)
+	{
+		const bool bStuck = FVector::Dist2D(Me, StuckRef) < 0.25f * Speed * StuckClock;
+		StuckCount = bStuck ? StuckCount + 1 : 0;
+		StuckRef = Me; StuckClock = 0.f;
+		if (bStuck && (DestDist <= StopDist + 120.f || FVector::Dist2D(Me, Path.Last()) <= 120.f))
+		{
+			CrowdWait = 1.5f; CrowdDest = Dest; StuckCount = 0;
+			return true;
+		}
+		if (StuckCount >= 3) { PathVersion = -1; StuckCount = 0; } // plan again on the next step
+	}
+	const FVector Next = Path[FMath::Min(PathIdx, Path.Num() - 1)];
 	FVector Dir = Next - Me;
 	Dir.Z = 0.f;
 	const float Dist = Dir.Size();
 	if (Dist > 1.f)
 	{
 		Dir /= Dist;
-		FVector NewLoc = Me + Dir * FMath::Min(Dist, Speed * Dt);
-		NewLoc.Z = GetActorLocation().Z; // keep the wading depth (Me is flattened by Loc2D)
-		if (Zone != ETSCZone::Free && ZoneAllows(Me) && !ZoneAllows(NewLoc))
+		const float StepLen = FMath::Min(Dist, Speed * Dt);
+		// The last stretch may hug a wall when the goal itself does (work spots next to trees and walls).
+		const bool bFinal = PathIdx >= Path.Num() - 1 && Dist < 60.f;
+		const FVector MoveDir = bFinal ? Dir : GM->SteerAround(this, Me, Dir);
+		float Moved = MoveNav(MoveDir * StepLen, bFinal ? 0.f : FTSCNavGrid::WallRadius);
+		if (bZoneBlocked && !MoveDir.Equals(Dir))
 		{
-			bZoneBlocked = true; // the palisade is the limit
+			bZoneBlocked = false; // only the sidestep hit the palisade: try the straight step
+			Moved = MoveNav(Dir * StepLen, FTSCNavGrid::WallRadius);
+		}
+		else if (!bZoneBlocked && Moved < 0.2f * StepLen && !MoveDir.Equals(Dir)) { Moved = MoveNav(Dir * StepLen, FTSCNavGrid::WallRadius); } // the sidestep was walled in
+		if (bZoneBlocked)
+		{
+			// As before the caller picks another goal; keep a straight path so the next call does not count as arrived.
 			Path.Reset();
+			Path.Add(FVector(Dest.X, Dest.Y, 0.f));
+			PathIdx = 0;
 			return false;
 		}
-		SetActorLocation(NewLoc);
 		const FRotator Want = Dir.Rotation();
 		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Want.Yaw, 0.f), Dt, 10.f));
 	}
@@ -1453,7 +1519,7 @@ bool ATSCUnit::SimTimberWork(float Dt)
 	if (TimberPathVersion != GM->GridVersion)
 	{
 		TArray<FVector> CheckPath;
-		if (!GM->FindPath(Loc2D(), Spot, CheckPath) || CheckPath.IsEmpty()
+		if (!GM->FindPath(Loc2D(), Spot, CheckPath, NavLayer()) || CheckPath.IsEmpty()
 			|| FVector::Dist2D(CheckPath.Last(), Spot) > 5.f)
 		{
 			CancelTimber();
