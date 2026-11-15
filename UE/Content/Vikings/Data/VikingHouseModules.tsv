@@ -24,7 +24,6 @@ FRM_Beam	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FRM_Beam.SM_VH_F
 FRM_Brace	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FRM_Brace.SM_VH_FRM_Brace	90.0	19.0	19.0
 FRM_CornerPost	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FRM_CornerPost.SM_VH_FRM_CornerPost	36.0	36.0	210.0
 FRM_KingPost	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FRM_KingPost.SM_VH_FRM_KingPost	20.0	20.0	50.0
-FRM_LogEndCap	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FRM_LogEndCap.SM_VH_FRM_LogEndCap	7.4	21.9	23.0
 FRM_MidPost	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FRM_MidPost.SM_VH_FRM_MidPost	26.0	26.0	210.0
 FRM_Rafter	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FRM_Rafter.SM_VH_FRM_Rafter	372.4	14.0	18.0
 FRM_TieBeam	Tripo	/Game/Vikings/Buildings/VikingHouse/Meshes/SM_VH_FRM_TieBeam.SM_VH_FRM_TieBeam	526.0	20.9	22.0

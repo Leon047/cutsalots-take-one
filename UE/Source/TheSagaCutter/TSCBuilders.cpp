@@ -140,14 +140,15 @@ namespace TSC
 
 		UStaticMesh* KitMesh(const FString& Module)
 		{
-			if (UStaticMesh** Found = GKitMeshes.Find(Module)) { return *Found; }
+			if (UStaticMesh** Found = GKitMeshes.Find(Module)) { if (*Found) { return *Found; } }
 			UStaticMesh* Mesh = nullptr;
 			if (const FString* Path = GKitModulePaths2.Find(Module))
 			{
 				Mesh = LoadObject<UStaticMesh>(nullptr, **Path);
 				if (Mesh) { Mesh->AddToRoot(); }
 			}
-			GKitMeshes.Add(Module, Mesh);
+			// Only a found mesh is cached: a missing asset (e.g. restored on disk later) is retried on the next house.
+			if (Mesh) { GKitMeshes.Add(Module, Mesh); }
 			return Mesh;
 		}
 
