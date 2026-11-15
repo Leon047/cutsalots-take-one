@@ -101,6 +101,14 @@ namespace
 	const TCHAR* const WeaponStaff[] = { TEXT("/Game/Weapons/Staff/Staff.Staff") };
 	const TCHAR* const WeaponArrow[] = { TEXT("/Game/Weapons/Arrow/Arrow.Arrow"), TEXT("/Game/Weapons/Errow/Arrow.Arrow") };
 
+	// What the workers carry home (the carry clip plays while they walk to the store): split logs and an armful of vegetables.
+	const TCHAR* const CargoLogs[] = { TEXT("/Game/Props/WoodenFurniture/SM_WoodenFurniture_05.SM_WoodenFurniture_05") };
+	const TCHAR* const CargoVegetables[] = { TEXT("/Game/Props/VegetablePlants/SM_VegetablePlant_03.SM_VegetablePlant_03") };
+	/** Longest side of the carried bundle as a fraction of the figure height, and where it is held (in front of the chest, actor space). */
+	constexpr float CargoLogsSize = 0.42f;
+	constexpr float CargoVegetablesSize = 0.36f;
+	const FVector CargoHold(32.f, 0.f, 62.f);
+
 	UStaticMesh* LoadFirstMesh(TArrayView<const TCHAR* const> Paths)
 	{
 		for (const TCHAR* Path : Paths)
@@ -166,7 +174,8 @@ namespace
 	/** The village dog notices the jarl from this far (cm; 3.5 cells). */
 	constexpr float JarlNoticeRadius = 700.f;
 	/** The husky attacks enemies this close to its master (cm; 3 cells). */
-	constexpr float GuardRadius = 600.f;
+	constexpr float GuardRadius = 450.f; // the pet's leash: it fights only enemies this close to its master
+	constexpr float PetDuration = 4.f;  // Hakon scratching the husky
 	/** Gallop speed while fleeing, relative to the walking speed. */
 	constexpr float FleeSpeedMul = 2.6f;
 }
@@ -211,7 +220,7 @@ void ATSCUnit::Init(ATSCGameMode* InGM, ETSCRole InRole, const FString& InName)
 
 	switch (Role)
 	{
-	case ETSCRole::Worker: Team = ETSCTeam::Villager; MaxHP = 60.f; Damage = 9.f; break;
+	case ETSCRole::Worker: Team = ETSCTeam::Villager; MaxHP = 60.f; Damage = 9.f; AggroRange = 450.f; break; // by day only fights what comes close
 	case ETSCRole::Hunter: Team = ETSCTeam::Villager; MaxHP = 130.f; Damage = 13.f; AttackRange = 950.f; AttackInterval = 1.0f; AggroRange = 1000.f; bFights = true; break;
 	case ETSCRole::Woodcutter: Team = ETSCTeam::Villager; MaxHP = 90.f; Damage = 14.f; break;
 	case ETSCRole::Healer: Team = ETSCTeam::Villager; MaxHP = 50.f; Damage = 4.f; break;
@@ -511,7 +520,48 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 		}
 		AddWeapon(DefShield, true);
 	}
+	if (Role == ETSCRole::Worker || Role == ETSCRole::Woodcutter)
+	{
+		// The work axe in hand while chopping, the bundle of logs / vegetables on the way home (see UpdateHeld).
+		AddWeapon(DefAxe, false);
+		CargoLogsComp = AddCargo(CargoLogs, CargoLogsSize);
+		CargoVegComp = AddCargo(CargoVegetables, CargoVegetablesSize);
+		UpdateHeld();
+	}
 	return true;
+}
+
+UStaticMeshComponent* ATSCUnit::AddCargo(TArrayView<const TCHAR* const> Paths, float SizeFrac)
+{
+	UStaticMesh* SM = LoadFirstMesh(Paths);
+	if (!SM || !Mesh) { return nullptr; }
+	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this);
+	Comp->SetMobility(EComponentMobility::Movable);
+	Comp->SetStaticMesh(SM);
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Comp->SetGenerateOverlapEvents(false);
+	Comp->SetCanEverAffectNavigation(false);
+	Comp->SetupAttachment(Body);
+	Comp->RegisterComponent();
+	AddInstanceComponent(Comp);
+	const FBox Box = SM->GetBoundingBox();
+	const float Scale = SizeFrac * VikingHeight / FMath::Max(Box.GetSize().GetMax(), (double)KINDA_SMALL_NUMBER);
+	Comp->SetRelativeScale3D(FVector(Scale));
+	Comp->SetRelativeLocation(CargoHold - Box.GetCenter() * Scale);
+	AddTintedMaterials(Comp);
+	Comp->SetVisibility(false);
+	return Comp;
+}
+
+void ATSCUnit::UpdateHeld()
+{
+	const bool bWood = Role == ETSCRole::Woodcutter || (Role == ETSCRole::Worker && Job == ETSCJob::Wood);
+	const bool bFood = Role == ETSCRole::Worker && Job == ETSCJob::Food;
+	const bool bCarrying = !bArmed && Order == ETSCOrder::Work && WorkPhase == 1;
+	// the axe is out while he works the timber (not on the way home, not in a fight: then the real weapon shows)
+	if (HeldItem) { HeldItem->SetVisibility(bWood && !bArmed && !bCarrying); }
+	if (CargoLogsComp) { CargoLogsComp->SetVisibility(bWood && bCarrying); }
+	if (CargoVegComp) { CargoVegComp->SetVisibility(bFood && bCarrying); }
 }
 
 bool ATSCUnit::BuildAnimal()
@@ -570,6 +620,10 @@ bool ATSCUnit::BuildAnimal()
 	Clips[(int32)ETSCAnim::PickUp] = TEXT("Eating");
 	Clips[(int32)ETSCAnim::Hit] = TEXT("Idle_HitReact_Left");
 	Clips[(int32)ETSCAnim::Death] = TEXT("Death");
+	if (Role == ETSCRole::Husky)
+	{
+		Clips[(int32)ETSCAnim::Punch] = TEXT("Idle_2_HeadLow"); // head down: being scratched by its master
+	}
 	Anims.SetNum((int32)ETSCAnim::Num);
 	for (int32 I = 0; I < (int32)ETSCAnim::Num; ++I)
 	{
@@ -616,6 +670,22 @@ void ATSCUnit::OrderFollow(ATSCUnit* InLeader)
 {
 	Order = ETSCOrder::Follow;
 	Leader = InLeader;
+	PlayTimer = 0.f;
+	PetTimer = 0.f;
+	PlayCooldown = FMath::FRandRange(10.f, 25.f); // the first romp comes a little after the landing
+}
+
+bool ATSCUnit::BeginPet(const FVector& DogPos, float Duration)
+{
+	if (Order != ETSCOrder::Patrol || !IsTargetable() || bDowned || Target.IsValid() || !Mesh) { return false; }
+	const FVector To = DogPos - Loc2D();
+	if (To.Size2D() > 320.f) { return false; }
+	SetActorRotation(FRotator(0.f, To.Rotation().Yaw, 0.f));
+	PatrolPause = Duration; // the patrol waits while he crouches to the dog
+	OneShotTimer = 0.f;
+	const float Len = PlayAnim(ETSCAnim::PickUp, false);
+	OneShotTimer = FMath::Min(Len, Duration);
+	return Len > 0.f;
 }
 
 bool ATSCUnit::SimWildlife(float Dt)
@@ -631,6 +701,66 @@ bool ATSCUnit::SimWildlife(float Dt)
 			return false;
 		}
 		if (L->IsHidden()) { return false; } // master indoors / aboard: wait
+		if (Role == ETSCRole::Husky)
+		{
+			PlayCooldown = FMath::Max(0.f, PlayCooldown - Dt);
+			// The master is free to play: walking his round, not fighting, not sheltered or lying down.
+			const bool bMasterFree = L->Order == ETSCOrder::Patrol && L->IsTargetable() && !L->bDowned && !L->Target.IsValid();
+			if (PetTimer > 0.f)
+			{
+				// Hakon is scratching it: stand in front of him, head low.
+				PetTimer -= Dt;
+				if (StepToward(PetSpot, Dt, 20.f))
+				{
+					const FVector To = L->Loc2D() - Loc2D();
+					SetActorRotation(FRotator(0.f, To.Rotation().Yaw, 0.f));
+					if (OneShotTimer <= 0.f && PetTimer > 0.5f)
+					{
+						OneShotTimer = PetTimer;
+						PlayAnim(ETSCAnim::Punch, true);
+					}
+					return false;
+				}
+				return true;
+			}
+			if (PlayTimer > 0.f)
+			{
+				if (!bMasterFree)
+				{
+					PlayTimer = 0.f;
+					PlayCooldown = FMath::FRandRange(20.f, 40.f);
+				}
+				else
+				{
+					PlayTimer -= Dt;
+					if (PlayTimer > 0.f)
+					{
+						// Romp: gallop circles round the master (he keeps walking his round).
+						PlayAngle += Dt * 1.8f;
+						const FVector Circle = L->Loc2D() + FVector(FMath::Cos(PlayAngle), FMath::Sin(PlayAngle), 0.f) * 150.f;
+						const float D = FVector::Dist2D(GetActorLocation(), Circle);
+						bGallop = true;
+						Speed = D > 250.f ? 340.f : 260.f;
+						StepToward(Circle, Dt, 15.f);
+						return true;
+					}
+					// Played enough: it runs up and Hakon strokes it.
+					PlayCooldown = FMath::FRandRange(40.f, 75.f);
+					if (L->BeginPet(Loc2D(), PetDuration))
+					{
+						PetTimer = PetDuration;
+						PetSpot = L->Loc2D() + (Loc2D() - L->Loc2D()).GetSafeNormal2D() * 90.f;
+						OneShotTimer = 0.f;
+					}
+					return false;
+				}
+			}
+			else if (PlayCooldown <= 0.f && bMasterFree && FVector::Dist2D(GetActorLocation(), L->GetActorLocation()) < 450.f)
+			{
+				PlayTimer = FMath::FRandRange(6.f, 9.f);
+				PlayAngle = FMath::FRandRange(0.f, 2.f * PI);
+			}
+		}
 		// Trot a little behind and to the side of the master; gallop to catch up.
 		const FVector Fwd = L->GetActorForwardVector().GetSafeNormal2D();
 		const FVector Spot = L->Loc2D() - Fwd * 110.f + FVector(-Fwd.Y, Fwd.X, 0.f) * 60.f;
@@ -993,6 +1123,30 @@ void ATSCUnit::OrderAssault()
 	Order = ETSCOrder::Assault;
 }
 
+void ATSCUnit::OrderPatrol(const TArray<FVector>& Route)
+{
+	if (Route.Num() < 2) { return; }
+	CancelTimber();
+	Order = ETSCOrder::Patrol;
+	PatrolRoute = Route;
+	// join the loop at the waypoint nearest to where the hero stands
+	float Best = TNumericLimits<float>::Max();
+	PatrolIdx = 0;
+	for (int32 I = 0; I < Route.Num(); ++I)
+	{
+		const float D = FVector::DistSquared2D(GetActorLocation(), Route[I]);
+		if (D < Best) { Best = D; PatrolIdx = I; }
+	}
+	PatrolPause = 0.f;
+	PatrolLegTime = 0.f;
+	Target = nullptr;
+	if (bSheltered)
+	{
+		bSheltered = false;
+		SetActorHiddenInGame(false);
+	}
+}
+
 void ATSCUnit::Teleport(const FVector& Pos)
 {
 	CancelTimber();
@@ -1044,6 +1198,7 @@ void ATSCUnit::Hurt(float Amount)
 	if (!IsAlive() || bInvulnerable) { return; }
 	HP -= Amount;
 	BarTimer = 6.f;
+	if (Role == ETSCRole::Worker) { SelfDefenseHold = FMath::Max(SelfDefenseHold, 4.f); SelfDefenseThink = 0.f; } // hit: reach for the weapon
 	if (HP <= 0.f)
 	{
 		Kill();
@@ -1086,6 +1241,9 @@ ATSCUnit* ATSCUnit::FindTarget() const
 		if (!bEnemy) { continue; }
 		const float D = FVector::Dist2D(Me, U->GetActorLocation());
 		const bool bThreatensMaster = Master && Master->IsAlive() && FVector::Dist2D(Master->GetActorLocation(), U->GetActorLocation()) < GuardRadius;
+		// On a leash: a pet with a living master only goes for enemies close to him. Once they run past GuardRadius it lets them go
+		// (no target -> Follow order) and gallops back to its master.
+		if (Master && Master->IsAlive() && !bThreatensMaster) { continue; }
 		if ((D < BestD || bThreatensMaster) && (bRanged || GM->CanReach(this, U)))
 		{
 			// among candidates pick the closest to the dog
@@ -1271,6 +1429,28 @@ void ATSCUnit::Sim(float Dt)
 	}
 	Body->SetRelativeRotation(FRotator::ZeroRotator);
 
+	// ----- self-defence: a worker attacked at his job draws sword (or axe) and shield, fights, then sheathes them and goes back to work -----
+	// (at night every villager is a defender already, see StartNight)
+	if (Role == ETSCRole::Worker && !bDefender && Order != ETSCOrder::Leave && Order != ETSCOrder::Shelter)
+	{
+		SelfDefenseHold = FMath::Max(0.f, SelfDefenseHold - Dt);
+		SelfDefenseThink -= Dt;
+		if (SelfDefenseThink <= 0.f)
+		{
+			SelfDefenseThink = 0.4f;
+			if (FindTarget()) { SelfDefenseHold = 4.f; } // keeps the weapons out a moment after the last enemy
+		}
+		const bool bDefend = SelfDefenseHold > 0.f;
+		if (bDefend != bFights)
+		{
+			bFights = bDefend;
+			SetArmed(bDefend);
+			if (!bDefend) { Target = nullptr; }
+		}
+	}
+
+	if (Mesh) { UpdateHeld(); }
+
 	// ----- fighting -----
 	if (bFights && Order != ETSCOrder::Leave && Order != ETSCOrder::Shelter)
 	{
@@ -1285,6 +1465,8 @@ void ATSCUnit::Sim(float Dt)
 		if (T)
 		{
 			CancelTimber();
+			PlayTimer = 0.f; // a fight ends any romp or petting
+			PetTimer = 0.f;
 			BarTimer = 6.f;
 			const FVector TL = T->Loc2D();
 			const float D = FVector::Dist2D(GetActorLocation(), TL);
@@ -1353,6 +1535,22 @@ void ATSCUnit::Sim(float Dt)
 	}
 	case ETSCOrder::Hold:
 		bMoving = !StepToward(HoldPos, Dt, 30.f);
+		break;
+	case ETSCOrder::Patrol:
+		if (PatrolRoute.Num() < 2) { break; }
+		if (PatrolPause > 0.f) { PatrolPause -= Dt; break; }
+		PatrolLegTime += Dt;
+		if (StepToward(PatrolRoute[PatrolIdx], Dt, 80.f) || PatrolLegTime > 30.f)
+		{
+			// every other corner the hero stops and looks around
+			if (PatrolIdx % 2 == 0 && PatrolLegTime <= 30.f) { PatrolPause = FMath::FRandRange(1.5f, 3.f); }
+			PatrolIdx = (PatrolIdx + 1) % PatrolRoute.Num();
+			PatrolLegTime = 0.f;
+		}
+		else
+		{
+			bMoving = true;
+		}
 		break;
 	case ETSCOrder::Shelter:
 		if (StepToward(HoldPos, Dt, 50.f))

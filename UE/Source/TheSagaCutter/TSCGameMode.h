@@ -174,6 +174,8 @@ public:
 	float HallMaxHP = 1.f;
 	bool bGateClosed = false;
 	bool bGateBroken = false;
+	/** Seconds the leaves stay open after the last villager walked through the barred gate. */
+	float GateVillagerLinger = 0.f;
 	bool bHammerBlessing = false;
 	bool bStagBlessing = false;
 
@@ -292,11 +294,15 @@ private:
 	void EconomyTick();
 	void ComputeRates(float& OutWood, float& OutFood) const;
 	void UpdateJobs();
+	/** Sends a named hero (Hakon, Sigrun, Torvald) on his own patrol loop inside the settlement; the three loops never meet. */
+	void OrderPatrolRoute(ATSCUnit* U);
 	void SimConstruction(float Dt);
 	void UpdateAtmosphere(float Dt);
 	void SimEmbers(float Dt);
 	void SpawnEmbers(int32 Region, int32 Count);
 	void SetGate(bool bClosed);
+	/** Bars or frees the two gate cells for the enemy nav layer only. */
+	void SetGateCells(bool bBar);
 	void ShowBanner(const FString& Text, float Time);
 	void AutoPlay(float Dt);
 	/** Cross-fades to Sound; does nothing if it is already the current track. */

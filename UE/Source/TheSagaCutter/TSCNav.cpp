@@ -44,6 +44,7 @@ void FTSCNavGrid::Init(int32 InGW, int32 InGH, float InCell)
 
 	Coarse.Init(0, CW * CH);
 	TreeFlag.Init(0, CW * CH);
+	GateBar.Init(0, CW * CH);
 	TreePos.Init(FVector2D::ZeroVector, CW * CH);
 	Props.Reset();
 	bPropsActive = true;
@@ -64,6 +65,14 @@ void FTSCNavGrid::SetCoarse(int32 Cx, int32 Cy, bool bBlock)
 	if (X < 0 || Y < 0 || X >= CW || Y >= CH) { return; }
 	Coarse[Y * CW + X] = bBlock ? 1 : 0;
 	TreeFlag[Y * CW + X] = 0;
+	bDirty = true;
+}
+
+void FTSCNavGrid::SetGateBar(int32 Cx, int32 Cy, bool bBar)
+{
+	const int32 X = Cx + PadW, Y = Cy + PadN;
+	if (X < 0 || Y < 0 || X >= CW || Y >= CH) { return; }
+	GateBar[Y * CW + X] = bBar ? 1 : 0;
 	bDirty = true;
 }
 
@@ -201,6 +210,20 @@ void FTSCNavGrid::Bake() const
 			MarkCell(Mask[TSCNavLayer::People], PC.X, PC.Y);
 			MarkCell(Mask[TSCNavLayer::Wildlife], PC.X, PC.Y);
 			MarkCell(PropMask, PC.X, PC.Y);
+		}
+	}
+
+	// Hostile = everything that blocks People, plus the barred gate cells.
+	Mask[TSCNavLayer::Hostile] = Mask[TSCNavLayer::People];
+	for (int32 Cy = 0; Cy < CH; ++Cy)
+	{
+		for (int32 Cx = 0; Cx < CW; ++Cx)
+		{
+			if (!GateBar[Cy * CW + Cx]) { continue; }
+			for (int32 Sy = 0; Sy < SUB; ++Sy)
+			{
+				for (int32 Sx = 0; Sx < SUB; ++Sx) { Mask[TSCNavLayer::Hostile][(Cy * SUB + Sy) * NW + (Cx * SUB + Sx)] = 1; }
+			}
 		}
 	}
 

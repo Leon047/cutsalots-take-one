@@ -609,8 +609,7 @@ void ATSCGameMode::BuildWorld()
 			}
 		}
 		// the gate and the road in front of it stay open
-		SetBlocked(GateX, GateY, bGateClosed);
-		SetBlocked(GateX, GateY + 1, bGateClosed);
+		SetGateCells(bGateClosed);
 		SetBlocked(GateX - 1, GateY, false);
 		SetBlocked(GateX - 1, GateY + 1, false);
 	}
@@ -687,7 +686,7 @@ void ATSCGameMode::BuildWorld()
 		for (int32 Y = 0; Y < GH; ++Y) { if (!(Y == 11 || Y == 12) || X >= 32) { SetBlocked(X, Y, true); } }
 	}
 	RaiderBoat = SpawnPrim(CellF(40.f, 12.f) + FVector(0.f, 0.f, -4.f));
-	BuildRaiderBoat(RaiderBoat);
+	BuildLongship(RaiderBoat, 620.f, 180.f); // the same drakkar as ours, bow to the west: it sails in from the east
 	RaiderBoat->Refresh();
 	RaiderBoat->SetActorHiddenInGame(true);
 
@@ -818,11 +817,38 @@ void ATSCGameMode::ResetVillagers()
 			U->SetActorHiddenInGame(false);
 		}
 	}
-	Hunter->OrderWork(CellF(3.5f, 12.f), CellF(5.6f, 11.4f));
+	OrderPatrolRoute(Hunter);
 	Woodcutter->OrderWork(CellF(7.5f, 9.5f), CellF(11.5f, 6.5f));
-	Healer->OrderWork(CellF(22.6f, 11.5f), CellF(21.4f, 12.3f));
-	Shield->OrderWork(CellF(9.7f, 11.3f), CellF(25.4f, 12.f));
+	OrderPatrolRoute(Healer);
+	OrderPatrolRoute(Shield);
 	UpdateJobs();
+}
+
+void ATSCGameMode::OrderPatrolRoute(ATSCUnit* U)
+{
+	if (!U || !U->IsAlive()) { return; }
+	// Cell coordinates inside the palisade. Each loop keeps at least ~1.5 cells from the other two, so the heroes never meet:
+	//  Hakon  - the outer ring along the palisade (gate road, north shore, dock, south), the longest walk
+	//  Torvald - the inner ring round the longhouse
+	//  Sigrun - the herb round through the garden, south of the longhouse
+	static const FVector2D HakonCells[] = {
+		{ 10.8f, 8.4f }, { 14.6f, 7.6f }, { 14.6f, 2.9f }, { 20.0f, 2.9f }, { 25.0f, 3.9f }, { 26.0f, 8.0f }, { 26.0f, 14.0f },
+		{ 25.8f, 19.0f }, { 22.0f, 21.8f }, { 15.0f, 21.8f }, { 10.6f, 20.4f }, { 9.3f, 15.5f }, { 10.8f, 12.0f } };
+	static const FVector2D TorvaldCells[] = { { 12.9f, 9.0f }, { 20.9f, 9.0f }, { 20.9f, 13.9f }, { 12.9f, 13.9f } };
+	static const FVector2D SigrunCells[] = { { 14.8f, 15.6f }, { 20.8f, 15.6f }, { 21.0f, 19.6f }, { 14.8f, 19.6f } };
+
+	const FVector2D* Cells = nullptr;
+	int32 Num = 0;
+	switch (U->Role)
+	{
+	case ETSCRole::Hunter: Cells = HakonCells; Num = UE_ARRAY_COUNT(HakonCells); break;
+	case ETSCRole::Shield: Cells = TorvaldCells; Num = UE_ARRAY_COUNT(TorvaldCells); break;
+	case ETSCRole::Healer: Cells = SigrunCells; Num = UE_ARRAY_COUNT(SigrunCells); break;
+	default: return;
+	}
+	TArray<FVector> Route;
+	for (int32 I = 0; I < Num; ++I) { Route.Add(CellF(Cells[I].X, Cells[I].Y)); }
+	U->OrderPatrol(Route);
 }
 
 void ATSCGameMode::BeginPlay()
@@ -1355,13 +1381,30 @@ void ATSCGameMode::Tick(float DeltaSeconds)
 	// the scout boat rows away once its scene is over
 	if (RaiderBoat && Scenes[3].bResolved && !RaiderBoat->IsHidden())
 	{
+		FRotator Heading = RaiderBoat->GetActorRotation();
+		Heading.Yaw = 180.f; // it came in bow-west; it rows away bow-east
+		RaiderBoat->SetActorRotation(Heading);
 		RaiderBoat->AddActorWorldOffset(FVector(320.f * RealDt, 0.f, 0.f));
 		if (RaiderBoat->GetActorLocation().X > CellF(44.f, 0.f).X) { RaiderBoat->SetActorHiddenInGame(true); }
 	}
 
 	// gate leaves
 	{
-		const float Want = (bGateClosed && !bGateBroken) ? 0.f : 1.f;
+		// A barred gate swings open for a villager who walks up to it and shuts again behind him; never while an enemy is at the gate.
+		bool bVillagerAtGate = false, bEnemyAtGate = false;
+		if (bGateClosed && !bGateBroken)
+		{
+			const FVector GatePoint = CellCorner(GateX, GateY + 1);
+			for (const ATSCUnit* U : Units)
+			{
+				if (!U || !U->IsTargetable() || U->IsHidden() || U->IsWildlife()) { continue; }
+				const float D = FVector::Dist2D(U->GetActorLocation(), GatePoint);
+				if (U->Team == ETSCTeam::Villager) { bVillagerAtGate |= D < 320.f; }
+				else { bEnemyAtGate |= D < 500.f; }
+			}
+		}
+		GateVillagerLinger = (bVillagerAtGate && !bEnemyAtGate) ? 1.f : FMath::Max(0.f, GateVillagerLinger - RealDt);
+		const float Want = (bGateClosed && !bGateBroken && GateVillagerLinger <= 0.f) ? 0.f : 1.f;
 		GateOpenAlpha = FMath::FInterpConstantTo(GateOpenAlpha, Want, RealDt, 1.2f);
 		if (GateLeaves.Num() == 2)
 		{
@@ -1701,7 +1744,7 @@ void ATSCGameMode::StartDay(int32 InDay)
 			Wood += 40.f;
 			EventTree->SetActorHiddenInGame(true);
 			BlockRect(TreeX, TreeY, 1, 3, false);
-			if (Hunter->IsAlive()) { Hunter->OrderWork(CellF(3.5f, 12.f), CellF(5.6f, 11.4f)); }
+			OrderPatrolRoute(Hunter);
 			Toast(TEXT("At dawn the fallen spruce is sawn up and the gate is cleared: +40 wood."));
 		}
 	}
@@ -2048,6 +2091,7 @@ void ATSCGameMode::StartScene(int32 Idx)
 	else if (Idx == 3)
 	{
 		RaiderBoat->SetActorHiddenInGame(false);
+		RaiderBoat->SetActorRotation(FRotator::ZeroRotator);
 		RaiderBoat->SetActorLocation(CellF(40.f, 12.f) + FVector(0.f, 0.f, -4.f));
 		ShowBanner(TEXT("A dark sail slips out of the fog toward the dock..."), 20.f);
 	}
@@ -2214,7 +2258,7 @@ void ATSCGameMode::ResolveLiving(int32 Idx)
 			Shield->HP = Shield->MaxHP * 0.45f;
 			Shield->Need = ETSCNeed::Heal;
 			Shield->BarTimer = 20.f;
-			Shield->OrderWork(CellF(24.6f, 12.f), CellF(21.f, 12.4f));
+			OrderPatrolRoute(Shield);
 			bShieldWounded = true;
 		}
 		S.Step = 5; // boat leaves in the day sim below
@@ -2270,7 +2314,7 @@ void ATSCGameMode::ApplyAshen(int32 Idx)
 			Hunter->bInvulnerable = true;
 			Hunter->bFights = false;
 			Hunter->HP = Hunter->MaxHP;
-			Hunter->OrderWork(CellF(10.2f, 12.3f), CellF(12.f, 13.3f));
+			OrderPatrolRoute(Hunter);
 		}
 		if (Woodcutter->IsAlive()) { Woodcutter->OrderWork(CellF(13.f, 6.5f), CellF(11.5f, 6.5f)); }
 		Toast(TEXT("EDIT: the forest burned years ago. The gate stands clear and Hakon walks home, but that timber is ash."));
@@ -2281,7 +2325,7 @@ void ATSCGameMode::ApplyAshen(int32 Idx)
 		GroveBonus = 0.f;
 		Healer->bDowned = false;
 		Healer->Need = ETSCNeed::None;
-		Healer->OrderWork(CellF(22.6f, 11.5f), CellF(21.4f, 12.3f));
+		OrderPatrolRoute(Healer);
 		Toast(TEXT("EDIT: the grove is dead roots and ash. Sigrun rises unharmed, but the glowing mushrooms will never feed you again."));
 	}
 	else if (Idx == 3)
@@ -2294,7 +2338,7 @@ void ATSCGameMode::ApplyAshen(int32 Idx)
 		{
 			Shield->bInvulnerable = false;
 			Shield->HP = Shield->MaxHP;
-			Shield->OrderWork(CellF(9.7f, 11.3f), CellF(25.4f, 12.f));
+			OrderPatrolRoute(Shield);
 		}
 		S.Step = 5;
 		Toast(TEXT("EDIT: the dock burned with the fleet. The scouts row away and Torvald is unhurt, but the longship and the fishing are lost."));
@@ -2380,8 +2424,20 @@ void ATSCGameMode::ConfirmCut()
 void ATSCGameMode::SetGate(bool bClosed)
 {
 	bGateClosed = bClosed;
-	SetBlocked(GateX, GateY, bClosed);
-	SetBlocked(GateX, GateY + 1, bClosed);
+	SetGateCells(bClosed);
+}
+
+void ATSCGameMode::SetGateCells(bool bBar)
+{
+	// The two gate cells never block the People layer: villagers open the gate and lock it behind them. The bar stops only
+	// raiders and the fog-born (TSCNavLayer::Hostile); Blocked[] keeps it for the game's own checks.
+	for (int32 Y = GateY; Y <= GateY + 1; ++Y)
+	{
+		if (InGrid(GateX, Y)) { Blocked[Y * GW + GateX] = bBar ? 1 : 0; }
+		Nav.SetCoarse(GateX, Y, false);
+		Nav.SetGateBar(GateX, Y, bBar);
+	}
+	++GridVersion;
 }
 
 void ATSCGameMode::StartNight()
@@ -2481,8 +2537,7 @@ void ATSCGameMode::DamageStructure(ETSCStructure S, float Amount)
 			GateHP = 0.f;
 			bGateBroken = true;
 			bWestBreached = true;
-			SetBlocked(GateX, GateY, false);
-			SetBlocked(GateX, GateY + 1, false);
+			SetGateCells(false);
 			Toast(TEXT("The west gate splinters! The fog-born pour through."));
 		}
 	}
@@ -3155,11 +3210,14 @@ void ATSCGameMode::TestNav()
 	// 3. closed gate has no way round
 	{
 		const bool bWasClosed = bGateClosed;
-		if (!bWasClosed) { SetBlocked(GateX, GateY, true); SetBlocked(GateX, GateY + 1, true); }
+		if (!bWasClosed) { SetGateCells(true); }
 		TArray<FVector> P;
-		const bool bFound = FindPath(CellF(10.5f, 12.f), CellF(5.f, 12.f), P, L);
+		// the barred gate stops the enemy layer, but a villager walks through it
+		const bool bFound = FindPath(CellF(10.5f, 12.f), CellF(5.f, 12.f), P, TSCNavLayer::Hostile);
 		Check(!bFound && P.Num() > 0 && IsInsideSettlement(P.Last()), TEXT("closed gate has no way round"));
-		if (!bWasClosed) { SetBlocked(GateX, GateY, false); SetBlocked(GateX, GateY + 1, false); }
+		TArray<FVector> PV;
+		Check(FindPath(CellF(10.5f, 12.f), CellF(5.f, 12.f), PV, L) && !PV.IsEmpty() && !IsInsideSettlement(PV.Last()), TEXT("villagers pass the closed gate"));
+		if (!bWasClosed) { SetGateCells(false); }
 	}
 	// 4. walker never enters a blocked cell
 	{
