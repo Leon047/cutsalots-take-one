@@ -170,6 +170,9 @@ private:
 	float PlayTimer = 0.f;
 	float PlayCooldown = 0.f;
 	float PlayAngle = 0.f;
+	float DogRunTime = 0.f;
+	float DogSoundCooldown = 0.f;
+	bool bDogGrowled = false;
 	/** Hakon's husky being scratched: seconds left and where it stands in front of him. */
 	float PetTimer = 0.f;
 	FVector PetSpot = FVector::ZeroVector;

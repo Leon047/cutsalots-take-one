@@ -1,4 +1,4 @@
-"""Generate The Saga Cutter ocean sound effects with the ElevenLabs Sound Effects API.
+"""Generate The Saga Cutter sound effects with the ElevenLabs Sound Effects API.
 
 Usage:
     py Scripts/generate_sfx.py                    # all sounds (2 takes of ocean_loop, 1 of the rest)
@@ -42,6 +42,86 @@ RAVEN = "A single raven croaking {}, far away across a mountain valley, natural 
 OWL = "A single owl hooting {} in a quiet night forest, distant, natural outdoor reverb, nothing else."
 
 SOUNDS = {
+    "dog_attack_bark": {
+        "seconds": 1.2, "loop": False, "channels": 1,
+        "prompt": (
+            "One sharp, deep, aggressive bark from a medium Siberian husky lunging to defend its owner. "
+            "A single forceful chesty bark, up close and dry with a short natural tail. "
+            "No playful yip, voices, other animals, footsteps, ambience, music, or echo."
+        ),
+    },
+    "dog_growl": {
+        "seconds": 1.5, "loop": False, "channels": 1,
+        "prompt": (
+            "One short, low, throaty warning growl from a medium Siberian husky about to charge an intruder. "
+            "Tense canine snarl that rises briefly and cuts off, no bark. Dry isolated recording with no "
+            "voices, other animals, footsteps, ambience, music, or echo."
+        ),
+    },
+    "dog_bark": {
+        "seconds": 1.8, "loop": False, "channels": 1, "takes": 2,
+        "prompt": (
+            "Isolated close recording of one medium-sized Siberian husky giving two quick, bright, "
+            "playful greeting barks, friendly and excited with a natural voice. Clean silence before "
+            "and after. No snarls, human voices, ambience, music, or echo."
+        ),
+    },
+    "dog_pant": {
+        "seconds": 3, "loop": False, "channels": 1,
+        "prompt": (
+            "Isolated close recording of a medium-sized husky panting heavily after running, "
+            "several rapid, soft open-mouth breaths with natural variation. No bark, whine, "
+            "footsteps, collar, wind, music, or reverb."
+        ),
+    },
+    "dog_howl": {
+        "seconds": 5, "loop": False, "channels": 1,
+        "prompt": (
+            "One lonely Siberian husky gives a single long, mournful howl. A soft breath into a "
+            "rising wavering ah-woo, sustained and then gently trailing off into silence. "
+            "Natural domestic dog voice, isolated dry recording, no pack, wind, music, or echo."
+        ),
+    },
+    "dog_howl_soft": {
+        "seconds": 4, "loop": False, "channels": 1,
+        "prompt": (
+            "One lone Siberian husky, close and dry. A small, broken whimper rises into a soft, "
+            "high mournful howl, wavers once, then falls into silence. Intimate and vulnerable, "
+            "as if calling for a missing owner. No barks, other animals, voices, wind, or music."
+        ),
+    },
+    "dog_howl_shaky": {
+        "seconds": 4.5, "loop": False, "channels": 1,
+        "prompt": (
+            "Close dry recording of one lonely Siberian husky. Two small, trembling canine "
+            "whimpers, then a deeply sad, shaky howl that loses strength and ends in a little "
+            "whine. Natural domestic dog vocalization. No speech, barking, music, or background."
+        ),
+    },
+    "dog_howl_broken": {
+        "seconds": 5.5, "loop": False, "channels": 1,
+        "prompt": (
+            "One grieving Siberian husky howls alone. A plaintive low-to-high call cracks in the "
+            "middle, pauses for a breath, then tries again with a shorter, weaker cry. Very sad, "
+            "realistic canine voice. Isolated dry sound, no barking, people, music, or other animals."
+        ),
+    },
+    "dog_howl_quiet": {
+        "seconds": 5, "loop": False, "channels": 1,
+        "prompt": (
+            "One Siberian husky quietly calling for its missing owner. A soft nasal whine slips "
+            "into one low, mournful descending howl, wavering and fading into silence. "
+            "Close dry animal recording. No bark, growl, voices, wind, reverb, or music."
+        ),
+    },
+    "dog_howl_long": {
+        "seconds": 6, "loop": False, "channels": 1,
+        "prompt": (
+            "One natural Siberian husky gives a long, low, full-throated sorrowful howl. "
+            "An audible inhale, a slow rounded rise to one sustained ringing note, then a long "
+            "downward tail that fades away. Isolated and dry, no pack, barking, wind, echo, or music."
+        ),
+    },
     "ocean_loop": {
         "seconds": 30, "loop": True, "channels": 2, "takes": 2,
         "prompt": (

@@ -14,12 +14,14 @@ class ATSCOcean;
 class ATSCTerrain;
 class UAudioComponent;
 class USoundBase;
+class USoundAttenuation;
 class UDirectionalLightComponent;
 class UExponentialHeightFogComponent;
 class UPostProcessComponent;
 class USkyLightComponent;
 
 enum class ETSCPhase : uint8 { Title, Day, Night, Epilogue };
+enum class ETSCDogSound : uint8 { PlayBark, Pant, Growl, AttackBark };
 enum class ETSCDayOnePrompt : uint8 { None, Wood, Food, Build, Cut };
 
 /** Editable regions of the map; every object in a region has a Living and an Ashen version. */
@@ -235,6 +237,7 @@ public:
 	void DamageStructure(ETSCStructure S, float Amount);
 	void AddTracer(const FVector& From, const FVector& To, const FLinearColor& Col);
 	void OnUnitDied(ATSCUnit* U);
+	void PlayDogSound(const ATSCUnit& Dog, ETSCDogSound Cue);
 	void Toast(const FString& Text);
 	/** Visual only: how deep a unit standing at P is in the shallows (0 on land and on standing dock planks). */
 	float GroundReliefAt(const FVector& P) const;
@@ -310,6 +313,12 @@ private:
 
 	UPROPERTY() TObjectPtr<UAudioComponent> MusicComp;
 	UPROPERTY() TObjectPtr<USoundBase> CurrentMusic;
+	UPROPERTY() TArray<TObjectPtr<USoundBase>> DogBarks;
+	UPROPERTY() TObjectPtr<USoundBase> DogPant;
+	UPROPERTY() TObjectPtr<USoundBase> DogHowl;
+	UPROPERTY() TObjectPtr<USoundBase> DogGrowl;
+	UPROPERTY() TObjectPtr<USoundBase> DogAttackBark;
+	UPROPERTY() TObjectPtr<USoundAttenuation> DogAttenuation;
 	FTimerHandle MusicTimer;
 
 	// scenes

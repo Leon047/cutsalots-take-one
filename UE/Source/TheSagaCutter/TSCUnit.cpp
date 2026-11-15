@@ -693,6 +693,16 @@ bool ATSCUnit::SimWildlife(float Dt)
 {
 	bGallop = false;
 	if (Role == ETSCRole::Husky) { Speed = BaseSpeed; } // undo the charge speed from a fight
+	auto StartDogPlay = [this]()
+	{
+		PlayTimer = FMath::FRandRange(6.f, 9.f);
+		PlayAngle = FMath::FRandRange(0.f, 2.f * PI);
+		if (DogSoundCooldown <= 0.f)
+		{
+			GM->PlayDogSound(*this, ETSCDogSound::PlayBark);
+			DogSoundCooldown = 2.1f;
+		}
+	};
 	if (Order == ETSCOrder::Follow)
 	{
 		ATSCUnit* L = Leader.Get();
@@ -758,8 +768,7 @@ bool ATSCUnit::SimWildlife(float Dt)
 			}
 			else if (PlayCooldown <= 0.f && bMasterFree && FVector::Dist2D(GetActorLocation(), L->GetActorLocation()) < 450.f)
 			{
-				PlayTimer = FMath::FRandRange(6.f, 9.f);
-				PlayAngle = FMath::FRandRange(0.f, 2.f * PI);
+				StartDogPlay();
 			}
 		}
 		// Trot a little behind and to the side of the master; gallop to catch up.
@@ -781,8 +790,7 @@ bool ATSCUnit::SimWildlife(float Dt)
 		const bool bJarlHere = Jarl && Jarl->IsTargetable() && !Jarl->IsHidden() && !Jarl->bDowned && ZoneAllows(Jarl->GetActorLocation());
 		if (PlayTimer <= 0.f && PlayCooldown <= 0.f && bJarlHere && FVector::Dist2D(GetActorLocation(), Jarl->GetActorLocation()) < JarlNoticeRadius)
 		{
-			PlayTimer = FMath::FRandRange(6.f, 9.f);
-			PlayAngle = FMath::FRandRange(0.f, 2.f * PI);
+			StartDogPlay();
 		}
 		if (PlayTimer > 0.f)
 		{
@@ -1410,6 +1418,10 @@ void ATSCUnit::Sim(float Dt)
 	}
 	if (bSheltered) { return; }
 
+	if (Role == ETSCRole::Husky)
+	{
+		DogSoundCooldown = FMath::Max(0.f, DogSoundCooldown - Dt);
+	}
 	BarTimer = FMath::Max(0.f, BarTimer - Dt);
 	AttackTimer = FMath::Max(0.f, AttackTimer - Dt);
 	bool bMoving = false;
@@ -1471,9 +1483,20 @@ void ATSCUnit::Sim(float Dt)
 			BarTimer = 6.f;
 			const FVector TL = T->Loc2D();
 			const float D = FVector::Dist2D(GetActorLocation(), TL);
+			const bool bHusky = Role == ETSCRole::Husky;
+			if (bHusky)
+			{
+				DogRunTime = 0.f;
+				if (!bDogGrowled && DogSoundCooldown <= 0.f && (D > AttackRange || AttackTimer > 0.f))
+				{
+					GM->PlayDogSound(*this, ETSCDogSound::Growl);
+					bDogGrowled = true;
+					DogSoundCooldown = 1.6f;
+				}
+			}
 			if (D > AttackRange)
 			{
-				if (Role == ETSCRole::Husky) { bGallop = true; Speed = 320.f; } // charge in at a gallop
+				if (bHusky) { bGallop = true; Speed = 320.f; } // charge in at a gallop
 				StepToward(TL, Dt, AttackRange * 0.85f);
 				bMoving = true;
 			}
@@ -1483,6 +1506,11 @@ void ATSCUnit::Sim(float Dt)
 				SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Want.Yaw, 0.f), Dt, 12.f));
 				if (AttackTimer <= 0.f)
 				{
+					if (bHusky && DogSoundCooldown <= 0.f)
+					{
+						GM->PlayDogSound(*this, ETSCDogSound::AttackBark);
+						DogSoundCooldown = 3.2f;
+					}
 					AttackTimer = AttackInterval * FMath::FRandRange(0.9f, 1.1f);
 					StartSwing(0.35f, AttackTimer, AttackRange > 300.f ? ETSCAnim::Shoot : Role == ETSCRole::Healer ? ETSCAnim::Punch : ETSCAnim::Slash);
 					T->Hurt(Damage);
@@ -1501,6 +1529,8 @@ void ATSCUnit::Sim(float Dt)
 			return;
 		}
 	}
+
+	bDogGrowled = false;
 
 	// ----- orders -----
 	switch (Order)
@@ -1593,6 +1623,17 @@ void ATSCUnit::Sim(float Dt)
 		}
 		break;
 	}
+	}
+	if (Role == ETSCRole::Husky)
+	{
+		const bool bRunning = bMoving && bGallop && !IsHidden();
+		DogRunTime = bRunning ? DogRunTime + Dt : 0.f;
+		if (DogRunTime >= 2.5f && DogSoundCooldown <= 0.f)
+		{
+			GM->PlayDogSound(*this, ETSCDogSound::Pant);
+			DogRunTime = 0.f;
+			DogSoundCooldown = 6.f;
+		}
 	}
 	Animate(Dt, bMoving);
 }

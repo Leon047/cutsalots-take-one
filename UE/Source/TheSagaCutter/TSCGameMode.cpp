@@ -2,6 +2,8 @@
 
 #include "TSCGameMode.h"
 
+#include "Sound/SoundAttenuation.h"
+
 #include "Components/AudioComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
@@ -151,6 +153,43 @@ ATSCGameMode::ATSCGameMode()
 	DayMusic = DayCue.Object;
 	NightMusic = NightCue.Object;
 	VictoryMusic = VictoryCue.Object;
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> Bark1(TEXT("/Game/Vikings/Audio/Dog/SW_DogBark_1.SW_DogBark_1"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> Bark2(TEXT("/Game/Vikings/Audio/Dog/SW_DogBark_2.SW_DogBark_2"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> Pant(TEXT("/Game/Vikings/Audio/Dog/SW_DogPant.SW_DogPant"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> Howl(TEXT("/Game/Vikings/Audio/Dog/SW_DogHowl_TakeC.SW_DogHowl_TakeC"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> Growl(TEXT("/Game/Vikings/Audio/Dog/SW_DogGrowl.SW_DogGrowl"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> AttackBark(TEXT("/Game/Vikings/Audio/Dog/SW_DogAttackBark.SW_DogAttackBark"));
+	if (Bark1.Object) { DogBarks.Add(Bark1.Object); }
+	if (Bark2.Object) { DogBarks.Add(Bark2.Object); }
+	DogPant = Pant.Object;
+	DogHowl = Howl.Object;
+	DogGrowl = Growl.Object;
+	DogAttackBark = AttackBark.Object;
+	// The colony camera sits 60 to 200 m from the ground.
+	DogAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("DogAttenuation"));
+	DogAttenuation->Attenuation.AttenuationShapeExtents = FVector(9000.f, 0.f, 0.f);
+	DogAttenuation->Attenuation.FalloffDistance = 16000.f;
+}
+
+void ATSCGameMode::PlayDogSound(const ATSCUnit& Dog, ETSCDogSound Cue)
+{
+	if (Dog.IsHidden()) { return; }
+	USoundBase* Sound = nullptr;
+	float Volume = 0.58f;
+	switch (Cue)
+	{
+	case ETSCDogSound::PlayBark:
+		if (!DogBarks.IsEmpty()) { Sound = DogBarks[FMath::RandHelper(DogBarks.Num())]; }
+		break;
+	case ETSCDogSound::Pant: Sound = DogPant; Volume = 0.48f; break;
+	case ETSCDogSound::Growl: Sound = DogGrowl; Volume = 0.65f; break;
+	case ETSCDogSound::AttackBark: Sound = DogAttackBark; Volume = 0.72f; break;
+	}
+	if (!Sound) { return; }
+
+	UGameplayStatics::PlaySoundAtLocation(this, Sound, Dog.GetActorLocation(),
+		Volume, FMath::FRandRange(0.96f, 1.04f), 0.f, DogAttenuation);
 }
 
 void ATSCGameMode::PlayMusic(USoundBase* Sound)
@@ -2555,6 +2594,11 @@ void ATSCGameMode::DamageStructure(ETSCStructure S, float Amount)
 
 void ATSCGameMode::OnUnitDied(ATSCUnit* U)
 {
+	if (U == Hunter && IsValid(HunterDog.Get()) && HunterDog->IsAlive() && !HunterDog->IsHidden() && DogHowl)
+	{
+		// A story beat: let the player hear the companion's howl even while looking elsewhere.
+		UGameplayStatics::PlaySound2D(this, DogHowl, 0.85f);
+	}
 	if (U->Team == ETSCTeam::Villager)
 	{
 		if (U->bNamed && Phase == ETSCPhase::Night) { Toast(TSCLoc::Fmt(TEXT("{0} has fallen."), { TSCLoc::Tr(U->DisplayName) })); }
