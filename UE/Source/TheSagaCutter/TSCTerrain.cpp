@@ -1,7 +1,6 @@
 // The Saga Cutter - game jam project.
 
 #include "TSCTerrain.h"
-#include "TSCStrandvik.h"
 
 #include "TheSagaCutter.h"
 #include "TSCBuilders.h"
@@ -233,14 +232,12 @@ ATSCTerrain::ATSCTerrain()
 
 float ATSCTerrain::RiverY(float X)
 {
-	if (TSCStrandvik::RiverFollowsLandscape()) { return TSCStrandvik::RouteAtX(X, 1); }
 	return TT::RiverBaseY + TT::RiverA1 * FMath::Sin(X / TT::RiverP1) + TT::RiverA2 * FMath::Sin(X / TT::RiverP2 + TT::RiverPh2)
 		+ TT::RiverWestDrift * FMath::Max(-X - TT::RiverWestDriftX, 0.f);
 }
 
 float ATSCTerrain::RiverZ(float X)
 {
-	if (TSCStrandvik::RiverFollowsLandscape()) { return TSCStrandvik::RouteAtX(X, 2); }
 	return 9.f + 0.004f * FMath::Max(1000.f - X, 0.f);
 }
 
@@ -252,13 +249,11 @@ float ATSCTerrain::RiverMouthCut(float X, float Y)
 
 float ATSCTerrain::RiverProximity(const FVector2D& P) const
 {
-	if (TSCStrandvik::IsActive(GetWorld())) { return FMath::Clamp(TSCStrandvik::RiverClearance(P) / TT::RiverProxRange, 0.f, 1.f); }
 	return FMath::Clamp(FMath::Abs((float)P.Y - RiverY((float)P.X)) / TT::RiverProxRange, 0.f, 1.f);
 }
 
 float ATSCTerrain::HeightAt(const FVector2D& P) const
 {
-	if (TSCStrandvik::IsActive(GetWorld())) { return TSCStrandvik::Height(P); }
 	const float X = (float)P.X, Y = (float)P.Y;
 
 	// Distance outside the flat rectangle.
@@ -330,7 +325,6 @@ FLinearColor ATSCTerrain::GroundColorAt(const FVector2D& P, float Z, const FVect
 
 void ATSCTerrain::BuildLand(const ATSCOcean* Ocean)
 {
-	if (TSCStrandvik::IsActive(GetWorld())) { Land->ClearAllMeshSections(); return; }
 	TArray<float> Xs = {-45000.f, -30000.f, -22000.f, -16500.f};
 	TArray<float> Ys = Xs;
 	for (float X = -15000.f; X <= 6600.f; X += (X >= -6600.f && X < 2640.f ? 60.f : 120.f)) { Xs.Add(X); }
@@ -465,7 +459,6 @@ void ATSCTerrain::Build(ATSCOcean* Ocean, const TArray<TArray<FVector2D>>& Trail
 
 					if (P.X >= -4700.f && FMath::Abs(P.Y) <= 3300.f) { continue; }                       // runtime forest area
 					if (FMath::Abs((float)P.Y - RiverY((float)P.X)) < 520.f) { continue; }                // river
-					if (TSCStrandvik::IsActive(GetWorld()) && TSCStrandvik::RiverClearance(P) < 180.f) { continue; }
 					if (P.X < -4700.f && FMath::Abs(P.Y - WesternTrailY(P.X)) < 235.f) { continue; }                           // forest road
 					const float Hz = HeightAt(P);
 					if (Hz < 0.f || Hz > 1400.f) { continue; }                                            // below land / above the tree line (S7: 2300, above the new snow line)
@@ -947,7 +940,6 @@ void ATSCTerrain::BuildForestFloor(const ATSCOcean* Ocean, TFunctionRef<bool(con
 				if (Random.FRand() >= Density * (0.32f + 0.68f * MossCover(P))) { continue; }
 				const float Radius = Random.FRandRange(Spec.MinRadius, Spec.MaxRadius) * (bClearing ? 0.78f : 1.f);
 				if (!HasClearance(P, Radius)) { continue; }
-				if (TSCStrandvik::IsActive(GetWorld()) && TSCStrandvik::RiverClearance(P) < Radius + 20.f) { continue; }
 
 				if (OverlapsTrail(P, Radius)) { continue; }
 
@@ -1026,20 +1018,7 @@ void ATSCTerrain::BuildTrails(const TArray<TArray<FVector2D>>& Routes, const ATS
 			{
 				const float U = 2.f * J / (Columns - 1) - 1.f;
 				const FVector2D V = P + Across * (U * Width);
-				float LandZ = HeightAt(V);
-				if (TSCStrandvik::IsActive(GetWorld()))
-				{
-					// Strandvik: the trail lies on the visible Landscape (the height file only approximates it).
-					TArray<FHitResult> Hits;
-					FCollisionQueryParams Params(SCENE_QUERY_STAT(TrailGround), false, this);
-					if (GetWorld()->LineTraceMultiByChannel(Hits, FVector(V, LandZ + 20000.f), FVector(V, LandZ - 20000.f), ECC_Visibility, Params))
-					{
-						for (const FHitResult& Hit : Hits)
-						{
-							if (Hit.GetActor() && Hit.GetActor()->GetClass()->GetName().Contains(TEXT("Landscape"))) { LandZ = Hit.ImpactPoint.Z; break; }
-						}
-					}
-				}
+				const float LandZ = HeightAt(V);
 				const float Z = Ocean ? FMath::Max(LandZ, Ocean->BeachHeightAt(V)) : LandZ;
 				Verts.Add(FVector(V, Z + 1.1f + RouteIndex * 0.45f));
 				Normals.Add(FVector::UpVector);
