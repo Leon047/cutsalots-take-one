@@ -158,7 +158,7 @@ namespace TSC
 		 * nothing) when data or a mesh is missing.
 		 */
 
-		bool BuildKitHouse(ATSCPrimActor* A, const TCHAR* House, int32 W, int32 H)
+		bool BuildKitHouse(ATSCPrimActor* A, const TCHAR* House, int32 W, int32 H, float Yaw = 0.f)
 		{
 			LoadKit();
 			if (!GKitOk2) { return false; }
@@ -188,13 +188,20 @@ namespace TSC
 			const float FW = W * CELL, FH = H * CELL;
 			const bool bTurn = FH > FW;  // long side of the footprint along Y: turn the house
 			const float Fit = bTurn ? FMath::Min(FW / K->Width, FH / K->Length) : FMath::Min(FW / K->Length, FH / K->Width);
-			const FTransform Place(FQuat(FRotator(0.f, bTurn ? 90.f : 0.f, 0.f)), FVector(FW * 0.5f, FH * 0.5f, 4.f), FVector(Fit));
+			const FTransform Place(FQuat(FRotator(0.f, (bTurn ? 90.f : 0.f) + Yaw, 0.f)), FVector(FW * 0.5f, FH * 0.5f, -16.f), FVector(Fit));
 			TMap<FName, int32> GroupCount;
 			for (int32 N = 0; N < K->Insts.Num(); ++N)
 			{
 				const FKitInst& I = K->Insts[N];
 				if (!Meshes[N]) { continue; }
-				const FTransform T = FTransform(I.Rot, I.Loc, I.Scale) * Place;
+				// The door steps overlap the stone footing; push them 22 cm further out from the wall they stand at.
+				FVector Loc = I.Loc;
+				if (I.Module == TEXT("DOOR_Steps"))
+				{
+					if (FMath::Abs(Loc.Y) / (K->Width * 0.5f) >= FMath::Abs(Loc.X) / (K->Length * 0.5f)) { Loc.Y += Loc.Y >= 0.f ? 22.f : -22.f; }
+					else { Loc.X += Loc.X >= 0.f ? 22.f : -22.f; }
+				}
+				const FTransform T = FTransform(I.Rot, Loc, I.Scale) * Place;
 				const int32 Idx = A->AddMeshPart(Meshes[N], T.GetLocation(), T.GetRotation().Rotator(), T.GetScale3D());
 				// Ashen look: the kit material's "Color" vector (if it has one) is multiplied by this grey-brown tint.
 				UStaticMeshComponent* Comp = A->Parts[Idx].Comp;
@@ -405,7 +412,7 @@ namespace TSC
 	void BuildHouse(ATSCPrimActor* A, int32 Seed)
 	{
 		// Kit house by seed (A = 2 bays, B = 3 bays); the tile recipe below is the fallback.
-		if (BuildKitHouse(A, Seed % 2 == 0 ? TEXT("House_Small_A") : TEXT("House_Small_B"), 2, 2))
+		if (BuildKitHouse(A, Seed % 2 == 0 ? TEXT("House_Small_A") : TEXT("House_Small_B"), 2, 2, 180.f))  // turned half way round: the door faces away from the garden
 		{
 			A->AddLight(FVector(CELL, CELL * 2.f + 70.f, 110.f), Pal::Fire, 2.2f, 0.3f, 420.f);
 			return;
@@ -423,12 +430,10 @@ namespace TSC
 		const int32 W = 6, H = 3;
 		if (BuildKitHouse(A, TEXT("House_Assembled"), W, H))
 		{
-			// Same lights as the tile longhouse (hearth by the door, glow at the west end); table and benches stay.
+			// Same lights as the tile longhouse (hearth by the door, glow at the west end). The outdoor table and benches
+			// that used to stand by the door were removed on request.
 			A->AddLight(FVector(W * CELL * 0.5f, H * CELL + 130.f, 120.f), Pal::Fire, 6.f, 2.5f, 900.f);
 			A->AddLight(FVector(-120.f, H * CELL * 0.5f, 140.f), Pal::Fire, 3.f, 1.f, 600.f);
-			A->AddPart(ETSCShape::Cube, FVector(4.8f * CELL, H * CELL + 110.f, 38.f), FRotator::ZeroRotator, FVector(1.5f, 0.5f, 0.06f), Pal::Plank);
-			A->AddPart(ETSCShape::Cube, FVector(4.8f * CELL, H * CELL + 60.f, 20.f), FRotator::ZeroRotator, FVector(1.4f, 0.16f, 0.05f), Pal::TimberDark);
-			A->AddPart(ETSCShape::Cube, FVector(4.8f * CELL, H * CELL + 160.f, 20.f), FRotator::ZeroRotator, FVector(1.4f, 0.16f, 0.05f), Pal::TimberDark);
 			return;
 		}
 		for (int32 X = 0; X < W; ++X) { for (int32 Y = 0; Y < H; ++Y) { Floor(A, X, Y, 6.f, Pal::Stone); } }
@@ -572,17 +577,57 @@ namespace TSC
 
 	void BuildGarden(ATSCPrimActor* A, int32 W, int32 H, TArray<int32>& Crops)
 	{
+		// One kit garden-bed tile (SM_VH_PROP_GardenBed, about 200 x 200 cm, pivot at the centre of its base) per cell; the old
+		// flat soil tile is the fallback when the mesh is missing.
+		LoadKit();
+		UStaticMesh* BedMesh = GKitOk2 ? KitMesh(TEXT("PROP_GardenBed")) : nullptr;
+		const float BedLift = BedMesh ? 18.f : 0.f;  // crops sit on the bed's mounds
 		for (int32 X = 0; X < W; ++X)
 		{
 			for (int32 Y = 0; Y < H; ++Y)
 			{
+				if (BedMesh)
+				{
+					const FVector Size = BedMesh->GetBoundingBox().GetSize();
+					const int32 B = A->AddMeshPart(BedMesh, FVector((X + 0.5f) * CELL, (Y + 0.5f) * CELL, 0.f), FRotator::ZeroRotator,
+						FVector(CELL / FMath::Max(Size.X, 1.0), CELL / FMath::Max(Size.Y, 1.0), 1.f));
+					if (UMaterialInstanceDynamic* MID = A->Parts[B].Comp->CreateDynamicMaterialInstance(0))
+					{
+						A->Parts[B].MID = MID;
+						A->Parts[B].LCol = FLinearColor::White;
+						A->Parts[B].ACol = FLinearColor(0.2f, 0.19f, 0.17f);  // Ashen: burnt, grey earth
+					}
+					continue;
+				}
 				const int32 S = Floor(A, X, Y, 3.f, Pal::Soil * (0.9f + 0.2f * ((X + Y) % 2)));
 				A->SetAshen(S, Pal::Ash * 0.8f);
 			}
 		}
-		auto Fence = [A, W](int32 Cx, int32 Cy, int32 Edge)
+		// The raised rim is replaced by the rail fence that stands beside the field (SM_WoodenFenceSet_01), at half size:
+		// two sections per cell edge, each half a cell long, scaled uniformly (so also half as tall and thick).
+		UStaticMesh* FenceMesh2 = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Props/WoodenFenceSet/SM_WoodenFenceSet_01.SM_WoodenFenceSet_01"));
+		auto Fence = [A, W, FenceMesh2](int32 Cx, int32 Cy, int32 Edge)
 		{
 			if (Edge == 0 && Cx == W / 2) { return; } // entrance
+			if (FenceMesh2)
+			{
+				const FBox B = FenceMesh2->GetBoundingBox();
+				const bool bAlongX = B.GetSize().X >= B.GetSize().Y;
+				const float Len = bAlongX ? B.GetSize().X : B.GetSize().Y;
+				const float S = (CELL * 0.5f) / FMath::Max(Len, 1.0);
+				// Edge direction: 0/2 run along X, 1/3 along Y. Turn the mesh's long axis onto it.
+				const bool bEdgeX = (Edge == 0 || Edge == 2);
+				const float Yaw = (bAlongX == bEdgeX) ? 0.f : 90.f;
+				const FQuat Q(FVector::UpVector, FMath::DegreesToRadians(Yaw));
+				const FVector C = B.GetCenter() * S;
+				for (int32 K = 0; K < 2; ++K)
+				{
+					const FVector Mid = bEdgeX ? FVector((Cx + 0.25f + 0.5f * K) * CELL, (Edge == 0 ? Cy : Cy + 1) * CELL, 0.f)
+						: FVector((Edge == 3 ? Cx : Cx + 1) * CELL, (Cy + 0.25f + 0.5f * K) * CELL, 0.f);
+					A->AddMeshPart(FenceMesh2, Mid - Q.RotateVector(FVector(C.X, C.Y, 0.f)) + FVector(0.f, 0.f, -B.Min.Z * S), FRotator(0.f, Yaw, 0.f), FVector(S));
+				}
+				return;
+			}
 			int32 F = Wall(A, Cx, Cy, Edge, 0.f, Pal::Timber, 1.f, 0.3f);
 			A->SetVis(F, ETSCVis::LivingOnly);
 			F = Wall(A, Cx, Cy, Edge, 0.f, Pal::Stone, 1.f, 0.5f, 0.2f);
@@ -604,7 +649,7 @@ namespace TSC
 					const bool bCabbage = (X + Y) % 2 == 0;
 					UStaticMesh* Mesh = bCabbage ? LeafyCrop : Sprout;
 					if (!Mesh) { continue; }
-					const int32 C = AddNaturalProp(A, Mesh, P - FVector(0.f, 0.f, 14.f), FRotator(0.f, (X * 43 + Y * 31 + I * 97) % 360, 0.f),
+					const int32 C = AddNaturalProp(A, Mesh, P + FVector(0.f, 0.f, BedLift - 14.f), FRotator(0.f, (X * 43 + Y * 31 + I * 97) % 360, 0.f),
 						bCabbage ? FVector(44.f, 42.f, 36.f) : FVector(38.f, 36.f, 49.f),
 						bCabbage ? FLinearColor(0.18f, 0.42f, 0.1f) : FLinearColor(0.3f, 0.45f, 0.05f));
 					A->SetAshen(C, FLinearColor(0.16f, 0.15f, 0.08f));
@@ -660,8 +705,66 @@ namespace TSC
 		Side(FVector2D(0.f, LenY), FVector2D(0.f, 0.f));
 	}
 
+	/**
+	 * The pier from the house kit (house "Pier_Dock": SM_VH_PIER_Deck / PIER_Post / lamps / bollards, crates, barrels and sacks as
+	 * the Removable group). Unscaled; the kit origin is the centre of the west end of the deck at ground level and the deck
+	 * runs along +X, so the part's local origin is moved to the middle of the dock's H cells. The Removable parts are the
+	 * dock crates (Living only, listed in Crates). Returns false, building nothing, when data or a mesh is missing.
+	 */
+	static bool BuildKitPier(ATSCPrimActor* A, int32 H, TArray<int32>& Crates)
+	{
+		LoadKit();
+		if (!GKitOk2) { return false; }
+		const FKitHouse* K = GKitHouses2.Find(TEXT("Pier_Dock"));
+		if (!K || K->Insts.Num() == 0)
+		{
+			KitWarn(TEXT("Pier_Dock"), TEXT("house Pier_Dock is not in the data"));
+			return false;
+		}
+		TArray<UStaticMesh*> Meshes;
+		for (const FKitInst& I : K->Insts)
+		{
+			UStaticMesh* M = KitMesh(I.Module);
+			if (!M)
+			{
+				KitWarn(TEXT("Pier_Dock"), FString::Printf(TEXT("mesh for module %s (Pier_Dock) is missing"), *I.Module));
+				return false;
+			}
+			Meshes.Add(M);
+		}
+		const FVector Origin(0.f, H * CELL * 0.5f, 0.f);
+		for (int32 N = 0; N < K->Insts.Num(); ++N)
+		{
+			const FKitInst& I = K->Insts[N];
+			const int32 Idx = A->AddMeshPart(Meshes[N], I.Loc + Origin, I.Rot, I.Scale);
+			UStaticMeshComponent* Comp = A->Parts[Idx].Comp;
+			Comp->ComponentTags.Add(FName(*(FString(TEXT("VH_")) + I.Group.ToString())));
+			if (UMaterialInstanceDynamic* MID = Comp->CreateDynamicMaterialInstance(0))
+			{
+				A->Parts[Idx].MID = MID;
+				A->Parts[Idx].LCol = FLinearColor::White;
+				A->Parts[Idx].ACol = FLinearColor(0.36f, 0.34f, 0.33f);
+			}
+			if (I.Group == FName(TEXT("Removable")))
+			{
+				A->SetVis(Idx, ETSCVis::LivingOnly);
+				Crates.Add(Idx);
+			}
+		}
+		return true;
+	}
+
 	void BuildDock(ATSCPrimActor* A, int32 W, int32 H, TArray<int32>& Crates)
 	{
+		if (BuildKitPier(A, H, Crates))
+		{
+			// Same torch glow and light as the tile pier, at the tip (the kit lamp meshes do not glow).
+			int32 L = A->AddPart(ETSCShape::Sphere, FVector(W * CELL, 0.f, 150.f), FRotator::ZeroRotator, FVector(0.2f), Pal::Fire);
+			A->SetGlow(L, FLinearColor(12.f, 5.f, 0.8f), FLinearColor(0.f, 0.f, 0.f));
+			A->SetVis(L, ETSCVis::LivingOnly);
+			A->AddLight(FVector(W * CELL, 0.f, 170.f), Pal::Fire, 3.f, 0.f, 600.f);
+			return;
+		}
 		for (int32 X = 0; X < W; ++X)
 		{
 			for (int32 Y = 0; Y < H; ++Y)
