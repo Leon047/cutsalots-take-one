@@ -149,6 +149,7 @@ namespace
 		bool bFitHeight = false;
 	};
 	const FTSCAnimalModel AnimalModels[] = {
+		{ ETSCRole::Boar, TEXT("Boar"), 130.f, TEXT("Attack_Headbutt") },
 		{ ETSCRole::Deer, TEXT("Deer"), 140.f, TEXT("Attack_Headbutt") },
 		{ ETSCRole::Stag, TEXT("Stag"), 175.f, TEXT("Attack_Headbutt") },
 		{ ETSCRole::Fox, TEXT("Fox"), 75.f, TEXT("Attack") },
@@ -287,12 +288,12 @@ void ATSCUnit::BuildFigure()
 		return;
 	}
 
-	if (IsWildlife() && BuildAnimal())
+	if ((Role == ETSCRole::Boar || IsWildlife()) && BuildAnimal())
 	{
 		return;
 	}
 
-	// Boar (and wildlife whose asset is missing): a primitive quadruped.
+	// Animal asset missing: use a primitive quadruped.
 	if (Role == ETSCRole::Boar || IsWildlife())
 	{
 		const FLinearColor Hide(0.13f, 0.08f, 0.05f);

@@ -6,6 +6,8 @@ from PIL import Image, ImageDraw
 key, out = sys.argv[1], sys.argv[2]
 CAP = sys.argv[3] if len(sys.argv) > 3 else os.path.join(__import__("tempfile").gettempdir(), "tripo_character", "cap")
 CLIPS = ["Idle", "Walk", "Gallop", "Attack_Headbutt", "Idle_HitReact_Left", "Death"]
+if key == "boar":
+    CLIPS.append("Eating")
 N, T = 3, 320
 cols = 2 * N
 rows = (len(CLIPS) + 1) // 2

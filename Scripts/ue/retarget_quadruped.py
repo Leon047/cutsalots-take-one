@@ -20,15 +20,18 @@ PASCAL = CHAR.capitalize()
 
 SRC_FOLDER = "/Game/Animals/Bull"
 SHARED = "/Game/Characters/mushroom_shared"
-DST_FOLDER = "/Game/Characters/mushroom_" + CHAR
+DST_NAME = "Boar" if CHAR == "boar" else "Mushroom_" + PASCAL
+DST_FOLDER = "/Game/Animals/Boar" if CHAR == "boar" else "/Game/Characters/mushroom_" + CHAR
 SRC_MESH = SRC_FOLDER + "/Bull"
-DST_MESH = DST_FOLDER + "/Mushroom_" + PASCAL
+DST_MESH = DST_FOLDER + "/" + DST_NAME
 SRC_RIG = SHARED + "/IK_Bull"
-DST_RIG = DST_FOLDER + "/IK_Mushroom_" + PASCAL
-RTG = DST_FOLDER + "/RTG_Bull_To_Mushroom_" + PASCAL
+DST_RIG = DST_FOLDER + "/IK_" + DST_NAME
+RTG = DST_FOLDER + "/RTG_Bull_To_" + DST_NAME
 SRC_PREFIX = "BullAnimalArmature_"
-DST_PREFIX = "Mushroom_" + PASCAL + "AnimalArmature_"
+DST_PREFIX = DST_NAME + "AnimalArmature_"
 CLIPS = ["Idle", "Walk", "Gallop", "Attack_Headbutt", "Idle_HitReact_Left", "Death"]
+if CHAR == "boar":
+    CLIPS.append("Eating")
 
 # Same chains on both rigs (the bone names are identical). No neck / head / tail in the mushroom mesh: their bones carry
 # no weights, they are mapped anyway so the clips stay whole.

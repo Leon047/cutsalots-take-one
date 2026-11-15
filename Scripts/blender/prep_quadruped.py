@@ -1,9 +1,9 @@
-"""Clean up a Tripo mushroom creature and skin it to a Bull-compatible quadruped skeleton for Unreal.
+"""Clean up a Tripo quadruped and skin it to a Bull-compatible skeleton for Unreal.
 
 Run headless:
     blender.exe -b -P Scripts/blender/prep_quadruped.py -- <key> <tripo.fbx> <bull_ref.fbx> <out dir>
 
-<key> is purple, cup or morel; <Key> below is KEY.capitalize().
+<key> is purple, cup, morel or boar; <Key> below is KEY.capitalize().
 Inputs
     <tripo.fbx>     the Tripo Studio export (textures in <tripo>.fbm/). Only its MESH is used: Tripo's "Other" rig is a
                     generic 16-bone tree (no clear four legs), so it is dropped (rig path = Blender fallback of
@@ -41,6 +41,7 @@ import prep_axolotl as pa  # noqa: E402  generic helpers only (clear_scene, sele
 #   zb    height (m) where the legs end under the cap / bowl / body: leg weights fade out between 0.8 zb and 1.15 zb
 #   scale  multiplier on the creature's size in metres (1.0 keeps Tripo's size)
 CFG = {
+    "boar": {"yaw": 90.0, "zb": 0.28, "scale": 1.0},
     "purple": {"yaw": 0.0, "zb": 0.20, "scale": 1.0},
     # cup: no clear front, the side facing the reference camera is -Y in the Tripo model
     "cup": {"yaw": 0.0, "zb": 0.28, "scale": 1.0},
@@ -77,9 +78,10 @@ def smooth(t):
 def set_names(key):
     pas = key.capitalize()
     pa.KEY, pa.PASCAL = key, pas
-    pa.MESH_NAME = f"SK_Mushroom{pas}"
-    pa.MAT_NAME = f"M_Mushroom{pas}"
-    pa.TEX_SUFFIXES = {k: f"T_Mushroom{pas}_{n}" for k, n in (("basecolor", "BaseColor"), ("normal", "Normal"),
+    stem = pas if key == "boar" else f"Mushroom{pas}"
+    pa.MESH_NAME = f"SK_{stem}"
+    pa.MAT_NAME = f"M_{stem}"
+    pa.TEX_SUFFIXES = {k: f"T_{stem}_{n}" for k, n in (("basecolor", "BaseColor"), ("normal", "Normal"),
                                                               ("roughness", "Roughness"), ("metallic", "Metallic"))}
     return pas
 
@@ -287,10 +289,11 @@ def hat_weights(centres, x):
     return {centres[-1][1]: 1.0}
 
 
-def skin(arm, mesh, feet, leg_r, zb):
+def skin(arm, mesh, feet, leg_r, zb, neck_deforms=False):
     me = mesh.data
     mesh.vertex_groups.clear()
-    deform = [n for lk in LEGS for n in LEGS[lk][1]] + SPINE
+    body_chain = SPINE + NECK[:-1] if neck_deforms else SPINE
+    deform = [n for lk in LEGS for n in LEGS[lk][1]] + body_chain
     vg = {n: mesh.vertex_groups.new(name=n) for n in deform}
     # leg height centres (z of the bone midpoint), per leg
     leg_c = {}
@@ -301,7 +304,7 @@ def skin(arm, mesh, feet, leg_r, zb):
             cs.append(((h.z + t.z) / 2, n))
         leg_c[lk] = sorted(cs)
     sp = []
-    for n in SPINE:
+    for n in body_chain:
         h, t = bone_pts(arm, n)
         sp.append(((h.y + t.y) / 2, n))
     sp.sort()
@@ -495,7 +498,7 @@ def main():
 
     arm = import_bull(bull)
     fit_armature(arm, feet, cfg["zb"])
-    dom_leg = skin(arm, mesh, feet, leg_r, cfg["zb"])
+    dom_leg = skin(arm, mesh, feet, leg_r, cfg["zb"], neck_deforms=key == "boar")
     wsum = check_weights(mesh)
     attach(arm, mesh)
 

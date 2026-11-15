@@ -2,17 +2,20 @@
 # Sole height at a frame = min over the four *_end leg bones of (pose z - rest z): the rest pose has the soles at z = 0.
 import unreal
 PASCAL = CHAR.capitalize()
-F = "/Game/Characters/mushroom_%s/" % CHAR
+MESH = "/Game/Animals/Boar/Boar" if CHAR == "boar" else "/Game/Characters/mushroom_%s/Mushroom_%s" % (CHAR, PASCAL)
 P = unreal.AnimPoseExtensions
 W = unreal.AnimPoseSpaces.WORLD
 E = unreal.AnimPoseEvaluationOptions()
-mesh = unreal.load_asset(F + "Mushroom_" + PASCAL)
+mesh = unreal.load_asset(MESH)
 ref = mesh.skeleton.get_reference_pose()
 BONES = ["FrontLowerLeg_L_end", "FrontLowerLeg_R_end", "BackLowerLeg_L_end", "BackLowerLeg_R_end"]
 rest = {b: P.get_bone_pose(ref, b, W).translation.z for b in BONES}
 out = {}
-for clip in ("Idle", "Walk", "Gallop", "Attack_Headbutt", "Idle_HitReact_Left", "Death"):
-    seq = unreal.load_asset(F + "Mushroom_%sAnimalArmature_%s" % (PASCAL, clip))
+clips = ["Idle", "Walk", "Gallop", "Attack_Headbutt", "Idle_HitReact_Left", "Death"]
+if CHAR == "boar":
+    clips.append("Eating")
+for clip in clips:
+    seq = unreal.load_asset(MESH + "AnimalArmature_" + clip)
     L = seq.get_play_length()
     n = 60
     lo, hi = 1e9, -1e9

@@ -13,16 +13,18 @@ if "CHAR" not in globals():
 PASCAL = CHAR.capitalize()
 if "REPO" not in globals():
     REPO = r"C:\Users\Sega\Documents\Projects\TheSagaCutter"
-SRC = os.path.join(REPO, "Art", "Tripo", "mushroom_" + CHAR)
-FOLDER = "/Game/Characters/mushroom_" + CHAR
-MESH_NAME = "Mushroom_" + PASCAL
+IS_BOAR = CHAR == "boar"
+SRC = os.path.join(REPO, "Art", "Tripo", CHAR if IS_BOAR else "mushroom_" + CHAR)
+FOLDER = "/Game/Animals/Boar" if IS_BOAR else "/Game/Characters/mushroom_" + CHAR
+MESH_NAME = "Boar" if IS_BOAR else "Mushroom_" + PASCAL
 SKEL_NAME = MESH_NAME + "_Skeleton"
-MAT_NAME = "M_Mushroom" + PASCAL
-TEX_PREFIX = "T_Mushroom" + PASCAL + "_"
-FBX_NAME = "SK_Mushroom" + PASCAL + ".fbx"
+FILE_STEM = "Boar" if IS_BOAR else "Mushroom" + PASCAL
+MAT_NAME = "M_" + FILE_STEM
+TEX_PREFIX = "T_" + FILE_STEM + "_"
+FBX_NAME = "SK_" + FILE_STEM + ".fbx"
 CLIP_PREFIX = MESH_NAME + "AnimalArmature_"
-IK_RIG_NAME = "IK_Mushroom_" + PASCAL
-RTG_NAME = "RTG_Bull_To_Mushroom_" + PASCAL
+IK_RIG_NAME = "IK_" + MESH_NAME
+RTG_NAME = "RTG_Bull_To_" + MESH_NAME
 # The FBX carries real centimetre data (Blender scene scale_length 0.01, exported with FBX_SCALE_NONE): bones and
 # vertices in cm, no node scale, UnitScaleFactor 1. Imported as is, with no unit conversion and no uniform scale, so the
 # mesh reference pose equals the skeleton reference pose (scale 1 on every bone).
@@ -33,6 +35,8 @@ if "FORCE_TEXTURES_AND_MATERIAL" not in globals():
     FORCE_TEXTURES_AND_MATERIAL = False
 EAL = unreal.EditorAssetLibrary
 CLIPS = ["Idle", "Walk", "Gallop", "Attack_Headbutt", "Idle_HitReact_Left", "Death"]
+if IS_BOAR:
+    CLIPS.append("Eating")
 # Emissive glow from the bright pixels of the base colour (purple: the two eyes). key -> (luminance threshold, gain, strength)
 EMISSIVE = {"purple": (0.85, 20.0, 6.0)}
 

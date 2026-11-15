@@ -12,7 +12,7 @@ BASE = unreal.Vector(0, 0, 60000)
 EAS = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 SDS = unreal.get_engine_subsystem(unreal.SubobjectDataSubsystem)
 SDL = unreal.SubobjectDataBlueprintFunctionLibrary
-AX_MESH = "/Game/Characters/mushroom_%s/Mushroom_%s" % (CHAR, CHAR.capitalize())
+AX_MESH = "/Game/Animals/Boar/Boar" if CHAR == "boar" else "/Game/Characters/mushroom_%s/Mushroom_%s" % (CHAR, CHAR.capitalize())
 AX_H = unreal.load_asset(AX_MESH).get_bounds().box_extent.z * 2
 VK_MESH = "/Game/Animals/Bull/Bull"
 LUX = 4.0
@@ -92,7 +92,7 @@ async def run(clips, nframes=4, cam_yaw_deg=35.0, size=512, viking=True, extra=N
         cc.post_process_blend_weight = 1.0
         files = []
         for clip in clips:
-            sa = unreal.load_asset("/Game/Characters/mushroom_%s/Mushroom_%sAnimalArmature_" % (CHAR, CHAR.capitalize()) + clip)
+            sa = unreal.load_asset(AX_MESH + "AnimalArmature_" + clip)
             sv = unreal.load_asset("/Game/Animals/Bull/BullAnimalArmature_" + clip)
             L = sa.get_play_length()
             loop = clip in ("Idle", "Walk", "Gallop")
