@@ -29,6 +29,39 @@ namespace
 	const FLinearColor LivingGreen(0.25f, 0.62f, 0.32f, 1.f);
 	const FLinearColor AshGrey(0.62f, 0.56f, 0.5f, 1.f);
 
+	void DrawNeedBubble(UCanvas& Canvas, const FVector2D& Center, float Scale)
+	{
+		const FTexture* White = Canvas.DefaultTexture ? Canvas.DefaultTexture->GetResource() : nullptr;
+		if (!White) { return; }
+
+		// Clockwise from the crown, with a little curled tail on the lower left.
+		static const FVector2D Rim[] = {
+			{0, -13}, {5, -12.6}, {9, -11}, {12, -8}, {13.5, -4}, {14, 0},
+			{13.5, 4}, {11.5, 8}, {8, 10.5}, {4, 12}, {-1, 12.3},
+			{-4, 12}, {-7, 14.5}, {-10, 15.5}, {-11, 15}, {-10, 13}, {-9.5, 10},
+			{-12, 7.5}, {-13.5, 4}, {-14, 0}, {-13.5, -4}, {-12, -8}, {-9, -11}, {-5, -12.6}
+		};
+		FCanvasTriangleItem Bubble(Center, Center, Center, White);
+		Bubble.TriangleList.Reset(2 * UE_ARRAY_COUNT(Rim));
+		Bubble.BlendMode = SE_BLEND_Translucent;
+
+		const auto AddLayer = [&](float Inset, const FLinearColor& Color)
+		{
+			for (int32 Index = 0; Index < UE_ARRAY_COUNT(Rim); ++Index)
+			{
+				FCanvasUVTri& Triangle = Bubble.TriangleList.AddDefaulted_GetRef();
+				Triangle.V0_Pos = Center;
+				Triangle.V1_Pos = Center + Rim[Index] * (Scale * Inset);
+				Triangle.V2_Pos = Center + Rim[(Index + 1) % UE_ARRAY_COUNT(Rim)] * (Scale * Inset);
+				Triangle.V0_UV = Triangle.V1_UV = Triangle.V2_UV = FVector2D::ZeroVector;
+				Triangle.V0_Color = Triangle.V1_Color = Triangle.V2_Color = Color;
+			}
+		};
+		AddLayer(1.f, FLinearColor(0.12f, 0.065f, 0.038f, 0.95f));
+		AddLayer(0.88f, FLinearColor(0.96f, 0.9f, 0.77f, 1.f));
+		Canvas.DrawItem(Bubble);
+	}
+
 	FSlateFontInfo MakeFont(float Px, bool bBold)
 	{
 		// Canvas text needs a UFont behind the Slate font info; the engine's Roboto has Regular and Bold faces.
@@ -271,6 +304,12 @@ void ATSCHUD::DrawHUD()
 		DrawTitle(GM);
 		return;
 	}
+	if (!bTriedLoadingResourceIcons)
+	{
+		bTriedLoadingResourceIcons = true;
+		ResourceIcons = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Vikings/UI/T_ResourceIcons.T_ResourceIcons"));
+		ResourceBarTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Vikings/UI/T_ResourceBar.T_ResourceBar"));
+	}
 	DrawWorld(GM);
 	if (GM->Phase == ETSCPhase::Epilogue)
 	{
@@ -353,18 +392,14 @@ void ATSCHUD::DrawWorld(ATSCGameMode* GM)
 		if (Unit->Need != ETSCNeed::None && !bNight)
 		{
 			const float Bx = X + 14.f, By = Top - 30.f;
-			Box(Bx - 13.f, By - 13.f, 26.f, 24.f, FLinearColor(0.f, 0.f, 0.f, 0.75f));
-			Box(Bx - 11.f, By - 11.f, 22.f, 20.f, FLinearColor(0.93f, 0.9f, 0.82f, 0.95f));
-			Box(Bx - 9.f, By + 9.f, 6.f, 5.f, FLinearColor(0.93f, 0.9f, 0.82f, 0.95f));
+			DrawNeedBubble(*Canvas, FVector2D(Bx, By) * U, U);
 			if (Unit->Need == ETSCNeed::Wood)
 			{
-				Box(Bx - 8.f, By - 5.f, 16.f, 8.f, FLinearColor(0.42f, 0.24f, 0.1f, 1.f));
-				Box(Bx + 5.f, By - 5.f, 3.f, 8.f, FLinearColor(0.8f, 0.62f, 0.36f, 1.f));
+				DrawResourceIcon(0, Bx, By - 1.f, 22.f);
 			}
 			else if (Unit->Need == ETSCNeed::Leaf)
 			{
-				Box(Bx - 5.f, By - 7.f, 10.f, 10.f, FLinearColor(0.2f, 0.6f, 0.15f, 1.f));
-				Box(Bx - 1.f, By - 9.f, 2.f, 16.f, FLinearColor(0.1f, 0.35f, 0.08f, 1.f));
+				DrawResourceIcon(1, Bx, By - 1.f, 22.f);
 			}
 			else
 			{
@@ -433,13 +468,6 @@ void ATSCHUD::TexturedWoodPanel(float X, float Y, float W, float H, const FLinea
 
 void ATSCHUD::DrawTop(ATSCGameMode* GM)
 {
-	if (!bTriedLoadingResourceIcons)
-	{
-		bTriedLoadingResourceIcons = true;
-		ResourceIcons = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Vikings/UI/T_ResourceIcons.T_ResourceIcons"));
-		ResourceBarTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Vikings/UI/T_ResourceBar.T_ResourceBar"));
-	}
-
 	// resources, top-left
 	TexturedWoodPanel(18.f, 14.f, 570.f, 66.f);
 	DrawResourceIcon(3, 556.f, 47.f, 38.f);
