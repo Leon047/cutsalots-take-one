@@ -1563,6 +1563,11 @@ void ATSCUnit::Sim(float Dt)
 		if (WorkTimer > 0.f)
 		{
 			WorkTimer -= Dt;
+			if (WorkPhase == 0 && !WorkFace.IsZero())
+			{
+				const FRotator Face = (WorkFace - Loc2D()).Rotation();
+				SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Face.Yaw, 0.f), Dt, 8.f));
+			}
 			if (WorkPhase == 0 && SwingTimer <= 0.f && OneShotTimer <= 0.f)
 			{
 				// Chopping (axe) or gathering (picking up).
@@ -1722,7 +1727,7 @@ void ATSCUnit::Animate(float Dt, bool bMoving)
 // A work cycle has two completed stages on the same reserved actor. Walking/carrying never completes a stage.
 bool ATSCUnit::IsTimberWorker() const
 {
-	return IsValid(GM) && GM->Phase == ETSCPhase::Day && IsAlive() && !bDowned && !bSheltered
+	return IsValid(GM) && GM->Phase == ETSCPhase::Day && IsAlive() && !bDowned && !bSheltered && !bScriptWork
 		&& Order == ETSCOrder::Work && !WorkA.Equals(WorkB)
 		&& (Role == ETSCRole::Woodcutter || (Role == ETSCRole::Worker && Job == ETSCJob::Wood));
 }

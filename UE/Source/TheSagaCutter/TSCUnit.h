@@ -106,6 +106,10 @@ public:
 	bool bDefender = false;
 	/** Scripted moments: cannot be hurt. */
 	bool bInvulnerable = false;
+	/** Scripted work (sawing up the fallen spruce): a plain chop-and-carry loop between WorkA and WorkB, no forest tree reservation. */
+	bool bScriptWork = false;
+	/** Where to face while chopping at WorkA (zero = keep the walking direction). */
+	FVector WorkFace = FVector::ZeroVector;
 	/** Seconds the health bar stays visible after a fight. */
 	float BarTimer = 0.f;
 	float Height = 120.f;

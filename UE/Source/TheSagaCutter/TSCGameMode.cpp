@@ -703,6 +703,7 @@ void ATSCGameMode::BuildWorld()
 		const float H = FMath::Max(EventTree->GetComponentsBoundingBox(true).GetSize().Z, 100.f);
 		const float Z = 950.f / H;
 		EventTree->SetActorScale3D(FVector(Z * 0.8f, Z * 0.8f, Z));
+		SpruceFullScale = EventTree->GetActorScale3D();
 	}
 	{
 		ATSCPrimActor* Stump = SpawnPrim(CellF(SprucePos.X, SprucePos.Y), TSCRegion::Forest);
@@ -1819,15 +1820,6 @@ void ATSCGameMode::StartDay(int32 InDay)
 	else if (Day == 2)
 	{
 		ShowBanner(TEXT("Day 2 - Growing the village.  Choose what to raise on the marked plot with the build bar below."), 12.f);
-		if (bPendingTimber)
-		{
-			bPendingTimber = false;
-			Wood += 40.f;
-			EventTree->SetActorHiddenInGame(true);
-			SetBlocked(TreeX, TreeY, false); SetSpruceFallen(false);
-			OrderPatrolRoute(Hunter);
-			Toast(TEXT("At dawn the fallen spruce is sawn up and the gate is cleared: +40 wood."));
-		}
 	}
 	else
 	{
@@ -1835,6 +1827,7 @@ void ATSCGameMode::StartDay(int32 InDay)
 		Plots[1].bAvailable = true;
 		if (!Plots[1].bUsed) { Plots[1].Marker->SetActorHiddenInGame(false); }
 		Toast(TEXT("A second plot has been cleared by the shore path."));
+		if (bClearingSpruce) { FinishSpruceClearing(); }
 	}
 	UpdateJobs();
 }
@@ -1871,6 +1864,7 @@ void ATSCGameMode::SimDay(float Dt)
 	}
 
 	SimConstruction(Dt);
+	if (bClearingSpruce) { SimSpruceClearing(Dt); }
 	if (ActiveScene < 0) { EconomyTimer += Dt; }
 	if (EconomyTimer >= EconomyInterval)
 	{
@@ -1951,7 +1945,18 @@ void ATSCGameMode::UpdateJobs()
 		ATSCUnit* U = Workers[I];
 		const ETSCJob Job = I < NumWood ? ETSCJob::Wood : (I < NumWood + NumFood ? ETSCJob::Food : ETSCJob::Idle);
 		U->SetJob(Job);
-		if (Job == ETSCJob::Wood)
+		U->bScriptWork = false;
+		U->WorkFace = FVector::ZeroVector;
+		if (Job == ETSCJob::Wood && bClearingSpruce)
+		{
+			FVector Stand, Face;
+			SpruceCutSpot(I, Stand, Face);
+			U->bScriptWork = true;
+			U->WorkFace = Face;
+			U->OrderWork(Stand, CellF(10.6f + (I % 4) * 0.5f, 6.5f));
+			U->Need = ETSCNeed::Wood;
+		}
+		else if (Job == ETSCJob::Wood)
 		{
 			static const float ChopY[6] = { 8.5f, 13.6f, 7.4f, 14.6f, 6.5f, 15.5f };
 			const FVector A = bForestOpen ? CellF(7.5f, ChopY[I % 6]) : CellF(12.6f + (I % 3) * 0.5f, 6.5f + (I % 2) * 0.5f);
@@ -1985,6 +1990,62 @@ void ATSCGameMode::UpdateJobs()
 			}
 		}
 	}
+	if (bClearingSpruce && Woodcutter && Woodcutter->IsAlive())
+	{
+		// Ulf takes the butt end, where he felled it.
+		Woodcutter->bScriptWork = true;
+		Woodcutter->WorkFace = CellF(SprucePos.X + 0.1f, SprucePos.Y + 0.6f);
+		Woodcutter->OrderWork(CellF(UlfChop.X, UlfChop.Y), CellF(11.5f, 6.5f));
+	}
+}
+
+void ATSCGameMode::SpruceCutSpot(int32 I, FVector& OutStand, FVector& OutFace) const
+{
+	// On the village side of the trunk, from the gate along to the crown (the trunk runs from SprucePos, 0.16 cell east per cell south).
+	static const FVector2D Stands[4] = { { 10.45f, 11.4f }, { 10.45f, 12.6f }, { 11.35f, 13.5f }, { 11.35f, 14.5f } };
+	const FVector2D P = Stands[I % 4] + FVector2D(0.45f * (I / 4), 0.f);
+	OutStand = CellF(P.X, P.Y);
+	OutFace = CellF(SprucePos.X + 0.16f * (P.Y - SprucePos.Y), P.Y);
+}
+
+void ATSCGameMode::SimSpruceClearing(float Dt)
+{
+	int32 Cutters = 0;
+	for (const ATSCUnit* U : Units) { if (U && U->IsAlive() && U->bScriptWork && U->Order == ETSCOrder::Work) { ++Cutters; } }
+	// Five axes (Ulf and four woodcutters) take about 30 s; fewer take longer, and someone always gets it done.
+	const float Before = SpruceClear;
+	SpruceClear = FMath::Min(1.f, SpruceClear + Dt * FMath::Clamp(Cutters, 1, 5) / (5.f * 30.f));
+	// Sawn from the crown down: the trunk shortens toward the stump, and the cut lengths pile up beside it.
+	EventTree->SetActorScale3D(FVector(SpruceFullScale.X, SpruceFullScale.Y, SpruceFullScale.Z * FMath::Lerp(1.f, 0.1f, SpruceClear)));
+	for (const float Mark : { 0.2f, 0.45f, 0.7f })
+	{
+		if (Before < Mark && SpruceClear >= Mark)
+		{
+			const float Y = SprucePos.Y + (1.f - Mark) * 4.4f;
+			ATSCPrimActor* Pile = SpawnPrim(CellF(SprucePos.X + 0.16f * (Y - SprucePos.Y) + 0.75f, Y));
+			BuildLogPile(Pile);
+			Pile->SetActorRotation(FRotator(0.f, 80.f, 0.f));
+			Pile->Refresh();
+			SprucePieces.Add(Pile);
+		}
+	}
+	if (SpruceClear >= 1.f) { FinishSpruceClearing(); }
+}
+
+void ATSCGameMode::FinishSpruceClearing()
+{
+	bClearingSpruce = false;
+	EventTree->SetActorHiddenInGame(true);
+	for (ATSCPrimActor* P : SprucePieces) { if (P) { P->SetActorHiddenInGame(true); } } // hauled off to the woodpile
+	SprucePieces.Reset();
+	SetBlocked(TreeX, TreeY, false);
+	SetSpruceFallen(false);
+	Wood += 40.f;
+	for (ATSCUnit* U : Units) { if (U) { U->bScriptWork = false; U->WorkFace = FVector::ZeroVector; } }
+	if (Hunter->IsAlive()) { OrderPatrolRoute(Hunter); }
+	if (Woodcutter->IsAlive()) { Woodcutter->OrderWork(CellF(7.5f, 9.5f), CellF(11.5f, 6.5f)); }
+	Toast(TEXT("The fallen spruce is sawn up and hauled to the woodpile. The west gate is clear: +40 wood."));
+	UpdateJobs();
 }
 
 // ----- construction -------------------------------------------------------------------------------------------------
@@ -2114,7 +2175,7 @@ void ATSCGameMode::DefineScenes()
 		S.Region = TSCRegion::Forest;
 		S.Alert = TEXT("The spruce has fallen across the west gate! Hakon the hunter is trapped outside, and the fog is moving.");
 		S.LivingName = TEXT("THE LIVING SAGA - The fallen spruce");
-		S.LivingText = TEXT("Hakon dies alone outside the gate, and the fog-born that kill him learn the way: three more come in every wave on the final night. The spruce is sawn up at dawn (+40 wood) and the forest keeps giving timber.");
+		S.LivingText = TEXT("Hakon dies alone outside the gate, and the fog-born that kill him learn the way: three more come in every wave on the final night. The woodcutters saw up the spruce (+40 wood), and the forest keeps giving timber.");
 		S.AshenName = TEXT("THE ASHEN SAGA - The burnt stump");
 		S.AshenText = TEXT("Here the forest burned years ago. No spruce bars the gate, Hakon walks home, and his bow guards the west gate on the final night. But scorched stumps give no timber: no +40 wood, and forest wood is halved for good.");
 	}
@@ -2327,7 +2388,11 @@ void ATSCGameMode::ResolveLiving(int32 Idx)
 			}
 		}
 		Toast(TEXT("Hakon the hunter falls outside the gate he could not reach. The fog-born have learned the way."));
-		bPendingTimber = true;
+		// The fight is over: the woodcutters saw up the spruce and haul it off (SimSpruceClearing; UpdateJobs in FinishScene
+		// sends them). The gate opens and the wood comes when they are done; the mourners join once they have stood a while.
+		bClearingSpruce = true;
+		SpruceClear = 0.f;
+		Toast(TEXT("The woodcutters set their axes to the fallen spruce."));
 	}
 	else if (Idx == 2)
 	{
@@ -2395,7 +2460,6 @@ void ATSCGameMode::ApplyAshen(int32 Idx)
 	{
 		TransitionRegion(TSCRegion::Forest, CellCenter(TreeX, TreeY));
 		ForestMul = 0.5f;
-		bPendingTimber = false;
 		SetSpruceFallen(false);
 		for (ATSCUnit* C : EventUnits) { if (C && C->IsAlive()) { C->bFights = false; C->Quarry = nullptr; C->bInvulnerable = false; C->OrderLeave(CellF(-5.f, 12.f)); } }
 		EventUnits.Reset();
@@ -2532,12 +2596,12 @@ void ATSCGameMode::SetGateCells(bool bBar)
 
 void ATSCGameMode::StartNight()
 {
+	if (bClearingSpruce) { FinishSpruceClearing(); }
 	Phase = ETSCPhase::Night;
 	PlayMusic(NightMusic);
 	NightTime = 0.f;
 	DayFlags = 0;
 	SetSpruceFallen(false);
-	bPendingTimber = false;
 	for (FTSCPlot& P : Plots) { P.Marker->SetActorHiddenInGame(true); }
 	for (ATSCUnit* U : Units) { if (U && U->Team != ETSCTeam::Villager && U->IsAlive()) { U->bGone = true; U->SetActorHiddenInGame(true); } }
 	RaiderBoat->SetActorHiddenInGame(true);

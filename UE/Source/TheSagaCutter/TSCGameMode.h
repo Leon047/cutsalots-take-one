@@ -309,6 +309,10 @@ private:
 	void SetGateCells(bool bBar);
 	/** Blocks the cells under the fallen gate spruce, or frees exactly those again. */
 	void SetSpruceFallen(bool bFallen);
+	/** Where the woodcutters stand to saw up the fallen spruce (I-th spot) and the trunk point they face. */
+	void SpruceCutSpot(int32 I, FVector& OutStand, FVector& OutFace) const;
+	void SimSpruceClearing(float Dt);
+	void FinishSpruceClearing();
 	void ShowBanner(const FString& Text, float Time);
 	void AutoPlay(float Dt);
 	/** Cross-fades to Sound; does nothing if it is already the current track. */
@@ -441,7 +445,11 @@ private:
 	int32 ExtraSawmills = 0;
 	int32 ExtraHealers = 0;
 	int32 HousesBuilt = 0;
-	bool bPendingTimber = false;
+	/** After the gate fight: the woodcutters saw up the fallen spruce and haul it off before the west gate opens. */
+	bool bClearingSpruce = false;
+	float SpruceClear = 0.f;           // 0..1
+	FVector SpruceFullScale = FVector::OneVector;
+	UPROPERTY() TArray<TObjectPtr<ATSCPrimActor>> SprucePieces;
 	bool bShieldWounded = false;
 	bool bHungryNight = false;
 	bool bFedNight = false;
