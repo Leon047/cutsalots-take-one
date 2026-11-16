@@ -2295,10 +2295,9 @@ void ATSCGameMode::SimScene(int32 Idx, float Dt)
 					C->MaxHP = C->HP = 75.f;
 					C->AggroRange = 450.f;
 					C->bFights = false;   // they walk past the forest workers and only fight once at Hakon (see Step 3)
-					// Hakon cannot win this fight: the fog-born go for him alone, and no blade (his, the woodcutters', the husky's)
-					// can bring them down by day, so he falls in the fight instead of dropping dead when the scene times out.
+					// The fog-born go for Hakon alone. Blades hurt them, but each one that dies makes the rest hit harder (Step 3),
+					// so he falls in the fight instead of dropping dead when the scene times out.
 					C->Quarry = Hunter;
-					C->bInvulnerable = true;
 					C->OrderHold(CellF(6.6f, 11.4f + (I % 3) * 0.5f));
 					EventUnits.Add(C);
 				}
@@ -2311,7 +2310,15 @@ void ATSCGameMode::SimScene(int32 Idx, float Dt)
 		}
 		else if (S.Step == 3)
 		{
-			for (ATSCUnit* C : EventUnits) { if (C && C->IsAlive() && !C->bFights && C->AtHoldPos()) { C->bFights = true; } }
+			// Every fallen fog-born makes the rest fiercer (+50% damage each), so Hakon still falls if blades thin them.
+			int32 Fallen = 0;
+			for (ATSCUnit* C : EventUnits) { if (C && !C->IsAlive()) { ++Fallen; } }
+			for (ATSCUnit* C : EventUnits)
+			{
+				if (!C || !C->IsAlive()) { continue; }
+				if (!C->bFights && C->AtHoldPos()) { C->bFights = true; }
+				C->Damage = 7.f * (1.f + 0.5f * Fallen);
+			}
 			if (!Hunter->IsAlive() || S.Timer > 45.f) { ResolveLiving(Idx); }
 		}
 	}
