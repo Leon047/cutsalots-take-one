@@ -31,9 +31,6 @@ namespace
 		bool bAxolotl;
 	};
 	const FVikingModel VikingMale{ TEXT("/Game/Characters/viking_male"), TEXT("Viking_Male"), TEXT("Viking_MaleCharacterArmature_"), TEXT("Fist_R"), TEXT("Fist_L"), 1.f, false };
-	const FVikingModel VikingFemale{ TEXT("/Game/Characters/viking_female"), TEXT("Viking_Female"), TEXT("Viking_FemaleCharacterArmature_"), TEXT("Fist_R"), TEXT("Fist_L"), 1.f, false };
-	/** The one lord (Torvald Shield-Bearer): horned helmet. */
-	const FVikingModel VikingLord{ TEXT("/Game/Characters/viking_lord"), TEXT("VikingHelmet"), TEXT("VikingHelmetCharacterArmature_"), TEXT("Fist_R"), TEXT("Fist_L"), 1.f, false };
 	/** The unnamed villager (Tripo axolotl warrior). Optional: if its mesh is missing the Viking models are used. */
 	const FVikingModel AxolotlWarrior{ TEXT("/Game/Characters/axolotl_warrior"), TEXT("Axolotl_Warrior"), TEXT("Axolotl_WarriorCharacterArmature_"), TEXT("RightHand"), TEXT("LeftHand"), 1.f, true };
 	/** The four named heroes (Tripo axolotls), each optional: a missing mesh falls back to the Viking models. */
@@ -436,22 +433,11 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 	}
 	if (!SkMesh)
 	{
-		if (bNamed)
-		{
-			Model = Role == ETSCRole::Shield ? &VikingLord : Role == ETSCRole::Healer ? &VikingFemale : &VikingMale;
-		}
-		else if (FMath::RandBool())
-		{
-			Model = &VikingFemale;
-		}
-		SkMesh = LoadMesh(*Model);
-	}
-	const bool bAxolotl = Model->bAxolotl;
-	if (!SkMesh && Model != &VikingMale)
-	{
+		// No axolotl mesh loaded: the male Viking is the last resort.
 		Model = &VikingMale;
 		SkMesh = LoadMesh(*Model);
 	}
+	const bool bAxolotl = Model->bAxolotl;
 	if (!SkMesh) { return false; }
 
 	const bool bRaider = Role == ETSCRole::Raider;

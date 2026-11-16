@@ -14,7 +14,7 @@ class UMeshComponent;
 class UAnimSequence;
 class UMaterialInstanceDynamic;
 
-/** Animation clips shared by the Viking characters (Content/Characters/viking_male, viking_female, viking_lord). */
+/** Animation clips shared by the Viking characters (Content/Characters/viking_male). */
 enum class ETSCAnim : uint8 { Idle, Walk, Run, WalkCarry, RunCarry, Slash, Shoot, Punch, PickUp, Hit, Death, Num };
 
 enum class ETSCTeam : uint8 { Villager, Creature, Raider, Animal };
