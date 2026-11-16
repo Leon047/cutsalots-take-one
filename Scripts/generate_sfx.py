@@ -42,6 +42,20 @@ RAVEN = "A single raven croaking {}, far away across a mountain valley, natural 
 OWL = "A single owl hooting {} in a quiet night forest, distant, natural outdoor reverb, nothing else."
 
 SOUNDS = {
+    "axe_wood": {
+        "seconds": 0.5, "loop": False, "channels": 1,
+        "prompt": (
+            "Single close dry axe chop into a solid tree trunk. Immediate sharp woody crack, "
+            "low solid knock, tiny splinter tick. Clean game one-shot. No swing, no ambience, no echo."
+        ),
+    },
+    "axe_enemy": {
+        "seconds": 0.5, "loop": False, "channels": 1,
+        "prompt": (
+            "Single close stylized fantasy melee impact, a weighty low punch with a short leather "
+            "slap and soft crunch. Compact and punchy, game one-shot. No voice, no swing, no ambience, no echo."
+        ),
+    },
     "dog_attack_bark": {
         "seconds": 1.2, "loop": False, "channels": 1,
         "prompt": (

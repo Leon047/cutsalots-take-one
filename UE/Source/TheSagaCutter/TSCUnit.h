@@ -37,6 +37,8 @@ struct FTSCArrowFlight
 	/** 0..1 progress; >= 1 means finished and the component can be reused. */
 	float T = 1.f;
 	float Dur = 0.3f;
+	/** True while the arrow is nocked on the bow being drawn (it follows the bow and has not been loosed yet). */
+	bool bNocked = false;
 };
 
 /**
@@ -106,6 +108,10 @@ public:
 	bool bDefender = false;
 	/** Scripted moments: cannot be hurt. */
 	bool bInvulnerable = false;
+	/** Scripted work (sawing up the fallen spruce): a plain chop-and-carry loop between WorkA and WorkB, no forest tree reservation. */
+	bool bScriptWork = false;
+	/** Where to face while chopping at WorkA (zero = keep the walking direction). */
+	FVector WorkFace = FVector::ZeroVector;
 	/** Seconds the health bar stays visible after a fight. */
 	float BarTimer = 0.f;
 	float Height = 120.f;
@@ -138,6 +144,14 @@ private:
 	void AddTintedMaterials(UMeshComponent* Comp);
 	/** Hunter: launch a visible arrow towards To. False if there is no arrow mesh (caller draws the tracer line). */
 	bool FireArrow(const FVector& To);
+	/** Hunter: nock an arrow and draw the bow; the arrow is loosed (and the hit lands) when the draw ends. */
+	void BeginDraw(ATSCUnit* At);
+	/** Abort the draw without shooting (target lost, unit downed). */
+	void CancelDraw();
+	/** Index of a free arrow in the pool (made if none is), or INDEX_NONE without the arrow mesh. */
+	int32 AcquireArrow();
+	/** Turn arrow Idx into a flight from its current place to To. */
+	void LoosenArrow(int32 Idx, const FVector& To);
 	void UpdateArrows(float Dt);
 	/** Plays an animation on the Viking mesh. Loops keep running if already playing. Returns the clip length (0 if missing). */
 	float PlayAnim(ETSCAnim Id, bool bLoop, float Rate = 1.f);
@@ -146,6 +160,8 @@ private:
 	void StartSwing(float ArmTime, float Window, ETSCAnim Clip);
 	bool StepToward(const FVector& Dest, float Dt, float StopDist);
 	ATSCUnit* FindTarget() const;
+	/** True when nothing solid (palisade, closed gate, fence, building) stands on the line between this archer and T. */
+	bool HasShot(const ATSCUnit* T) const;
 	void Animate(float Dt, bool bMoving);
 	/** Sinks the unit into the shallows (visual only) and throws splashes while it walks there. */
 	void UpdateWading(float Dt);
@@ -156,6 +172,11 @@ private:
 	TObjectPtr<ATSCGameMode> GM;
 
 	TWeakObjectPtr<ATSCUnit> Target;
+	/** Scripted prey: while it lives, this unit attacks only it (the spruce-scene fog-born go for Hakon alone). */
+	TWeakObjectPtr<ATSCUnit> Quarry;
+	/** Mourning: seconds left standing still, facing MournAt, before the unit goes back to its order (Hakon's fall). */
+	float MournTimer = 0.f;
+	FVector MournAt = FVector::ZeroVector;
 	/** Follow order: the unit to trail (the husky follows Hakon). */
 	TWeakObjectPtr<ATSCUnit> Leader;
 	/** Wander order: roaming radius around HoldPos, current goal and the pause before moving on. */
@@ -173,6 +194,8 @@ private:
 	float DogRunTime = 0.f;
 	float DogSoundCooldown = 0.f;
 	bool bDogGrowled = false;
+	/** A husky stops and barks at any boar within this distance. */
+	float BoarAlertRadius = 650.f;
 	/** Hakon's husky being scratched: seconds left and where it stands in front of him. */
 	float PetTimer = 0.f;
 	FVector PetSpot = FVector::ZeroVector;
@@ -227,6 +250,7 @@ private:
 	float SelfDefenseThink = 0.f;
 	float AttackTimer = 0.f;
 	float SwingTimer = 0.f;
+	bool bUsesCombatAxe = false;
 	float AnimPhase = 0.f;
 	float DeathTimer = 0.f;
 	float ThinkTimer = 0.f;
@@ -280,4 +304,15 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> ArrowComps;
 	TArray<FTSCArrowFlight> Arrows;
+	/** Bow draw in progress: seconds left, the full duration, the target and the nocked arrow's pool index. */
+	float DrawTimer = 0.f;
+	float DrawTotal = 0.f;
+	TWeakObjectPtr<ATSCUnit> DrawTarget;
+	FVector DrawAim = FVector::ZeroVector;
+	int32 NockedIdx = INDEX_NONE;
+	/** Bow pose: blend weight (0 = the clip, 1 = both arms in the draw pose) and how far the string hand is drawn (0..1). */
+	float BowPoseW = 0.f;
+	float DrawPull = 0.f;
+	/** Called after the animation is evaluated: poses both arms for the draw (two-bone IK on top of the clip). */
+	void ApplyBowPose();
 };

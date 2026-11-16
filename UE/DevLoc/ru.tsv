@@ -96,7 +96,8 @@ Torvald	Торвальд
 == Days: banners and toasts ==
 Three days. One night. Two sagas.	Три дня. Одна ночь. Две саги.
 Day 2 - Growing the village.  Choose what to raise on the marked plot with the build bar below.	День 2 - Деревня растёт.  Выбери на панели построек внизу, что возвести на размеченном участке.
-At dawn the fallen spruce is sawn up and the gate is cleared: +40 wood.	На рассвете упавшую ель распилили, и ворота свободны: +40 древесины.
+The woodcutters set their axes to the fallen spruce.	Лесорубы берутся за топоры у поваленной ели.
+The fallen spruce is sawn up and hauled to the woodpile. The west gate is clear: +40 wood.	Поваленную ель распилили и унесли к поленнице. Западные ворота свободны: +40 древесины.
 Day 3 - The fog is thickening, and sails have been sighted.  They come tonight. Finish your preparations.	День 3 - Туман густеет, и на море видны паруса.  Они придут этой ночью. Заверши приготовления.
 A second plot has been cleared by the shore path.	У береговой тропы расчищен второй участок.
 Sigrun walks to the stag grove to gather glowing mushrooms.	Сигрун идёт в Оленью рощу собирать светящиеся грибы.
@@ -120,44 +121,43 @@ The altar glows green: the forest gives more food and sends fewer horrors.	Ал�
 The Boar in the Garden	Вепрь в огороде
 A boar has broken out of the forest and is charging the vegetable garden!	Вепрь вырвался из леса и несётся на огород!
 LIVING SAGA - Wooden fence	ЖИВАЯ САГА - Деревянная изгородь
-Lose 25 food to the boar and halve today's harvest. Keep the fertile soil.	Вепрь сожрёт 25 пищи и вдвое урежет сегодняшний урожай. Плодородная земля останется.
+Lose 30 food and half of today's harvest. The soil stays rich, but the longhouse gets no wall.	Вепрь сожрёт 30 пищи и половину сегодняшнего урожая. Земля останется плодородной, но стены у длинного дома не будет.
 ASHEN SAGA - Stone wall	ПЕПЕЛЬНАЯ САГА - Каменная стена
-The wall saves the crops. Garden yields drop 25% for the rest of the saga.	Стена спасает посевы. Но до конца саги огород даёт на 25% меньше.
+The wall saves the crops and shields the longhouse on the final night (+120 hall strength). Garden yields drop 40% for good.	Стена спасает посевы, а в последнюю ночь прикроет длинный дом (+120 к прочности). Но огород до конца саги даёт на 40% меньше.
 
 == Scene 2: the spruce ==
 The Spruce at the Gate	Ель у ворот
 The spruce has fallen across the west gate! Hakon the hunter is trapped outside, and the fog is moving.	Ель рухнула поперёк западных ворот! Хакон-охотник заперт снаружи, а туман надвигается.
 THE LIVING SAGA - The fallen spruce	ЖИВАЯ САГА - Упавшая ель
-Hakon stands alone against the fog-born and will not live to see the gate cleared. At dawn the spruce is sawn up: +40 wood, and the forest keeps giving timber.	Хакон один встречает порождений тумана и не доживёт до расчистки ворот. На рассвете ель распилят: +40 древесины, и лес по-прежнему даёт брёвна.
+Hakon dies alone outside the gate, and the fog-born that kill him learn the way: three more come in every wave on the final night. The woodcutters saw up the spruce (+40 wood), and the forest keeps giving timber.	Хакон гибнет один за воротами, а убившие его порождения тумана запоминают дорогу: в последнюю ночь в каждой волне их будет на троих больше. Лесорубы распилят ель (+40 древесины), и лес по-прежнему даёт брёвна.
 THE ASHEN SAGA - The burnt stump	ПЕПЕЛЬНАЯ САГА - Обгорелый пень
-Here the forest burned years ago. No spruce stood by the gate, so nothing blocks it and Hakon walks home. But scorched stumps give no timber: no +40 wood, and wood from the forest falls by 40% for good.	Здесь лес сгорел много лет назад. У ворот не росло ели, путь свободен, и Хакон идёт домой. Но горелые пни не дают брёвен: никаких +40 древесины, а добыча леса навсегда падает на 40%.
+Here the forest burned years ago. No spruce bars the gate, Hakon walks home, and his bow guards the west gate on the final night. But scorched stumps give no timber: no +40 wood, and forest wood is halved for good.	Здесь лес сгорел много лет назад. Ель не перекрывает ворота, Хакон возвращается домой, и в последнюю ночь его лук стережёт западные ворота. Но обгорелые пни не дают брёвен: нет +40 древесины, а лес навсегда даёт вдвое меньше.
 
 == Scene 3: the grove ==
 Spores in the Stag Grove	Споры в Оленьей роще
 Sigrun the healer has breathed the grove's spores and fallen! No one else can tend the wounded.	Сигрун-целительница вдохнула споры рощи и слегла! Больше некому лечить раненых.
 THE LIVING SAGA - The glowing grove	ЖИВАЯ САГА - Светящаяся роща
-The spores take Sigrun before nightfall. The grove keeps feeding the village (+2 food income), but no healer will tend your defenders on the final night.	Споры забирают Сигрун до темноты. Роща по-прежнему кормит деревню (+2 к добыче пищи), но в последнюю ночь твоих защитников некому будет лечить.
+The spores take Sigrun before nightfall. On the final night no one heals your defenders unless you build a healer's hut. The grove keeps feeding the village (+3 food income).	Споры забирают Сигрун до темноты. В последнюю ночь твоих защитников некому лечить, если не построить хижину целителя. Роща по-прежнему кормит деревню (+3 к добыче пищи).
 THE ASHEN SAGA - The dead roots	ПЕПЕЛЬНАЯ САГА - Мёртвые корни
-Here the grove burned in the old war and nothing grows that could harm her. Sigrun lives. But the glowing mushrooms are gone (-2 food income) and the Stag's blessing is weakened.	Здесь роща сгорела в старой войне, и не растёт ничего, что могло бы ей навредить. Сигрун жива. Но светящихся грибов больше нет (-2 к добыче пищи), и благословение Оленя слабеет.
+Here the grove burned in the old war and nothing grows that could harm her. Sigrun lives and heals your defenders through the final night. But the glowing mushrooms are gone (-3 food income) and the Stag's blessing is weakened.	Здесь роща сгорела в старой войне, и не растёт ничего, что могло бы ей навредить. Сигрун жива и всю последнюю ночь лечит твоих защитников. Но светящихся грибов больше нет (-3 к добыче пищи), а благословение Оленя слабеет.
 
 == Scene 4: the dock ==
 Scouts at the Dock	Лазутчики у причала
 A scout boat has made fast to the dock! Torvald the shield-bearer runs to meet the raiders alone.	К причалу пристала лодка лазутчиков! Торвальд Щитоносец один бежит навстречу налётчикам.
 THE LIVING SAGA - The timber dock	ЖИВАЯ САГА - Бревенчатый причал
-Torvald drives the scouts off but is badly wounded, and they carry away the stores (-30 food). The dock stands: fishing goes on (+2 food income), and tonight the raiders land in force.	Торвальд отгоняет лазутчиков, но тяжело ранен, а они уносят запасы (-30 пищи). Причал стоит: рыбалка продолжается (+2 к добыче пищи), а ночью налётчики высадятся всей силой.
+Torvald drives the scouts off but is badly wounded, and they carry away the stores (-30 food). Tonight six raiders land at the dock. The dock stands and the fishing goes on (+3 food income).	Торвальд отгоняет лазутчиков, но тяжело ранен, а запасы унесены (-30 пищи). Этой ночью у причала высадятся шестеро налётчиков. Причал цел, рыбалка продолжается (+3 к добыче пищи).
 THE ASHEN SAGA - The charred posts	ПЕПЕЛЬНАЯ САГА - Обугленные сваи
-Here the dock burned with the fleet. The scouts find nowhere to land and row away; Torvald is unhurt and tonight fewer raiders struggle ashore. But the longship is a wreck and the fishing is gone (-2 food income).	Здесь причал сгорел вместе с флотом. Лазутчикам негде пристать, и они уходят; Торвальд невредим, а ночью на берег выберется меньше налётчиков. Но драккар разбит, и рыбалки больше нет (-2 к добыче пищи).
+Here the dock burned with the fleet. The scouts row away, Torvald is unhurt, and tonight only three raiders wade ashore, slow in the surf. But the longship is a wreck and the fishing is gone (-3 food income).	Здесь причал сгорел вместе с флотом. Лазутчики уплывают, Торвальд невредим, и этой ночью лишь трое налётчиков выберутся на берег, увязая в прибое. Но драккар разбит, а рыбалки больше нет (-3 к добыче пищи).
 
 == Scene lead-ins and outcomes ==
 Ulf the woodcutter sets his axe to the old spruce beside the west gate...	Ульф-лесоруб заносит топор над старой елью у западных ворот...
 A dark sail slips out of the fog toward the dock...	Тёмный парус выскальзывает из тумана к причалу...
 The spruce crashes down across the gateway. Hakon is on the wrong side of it.	Ель с грохотом рушится поперёк ворот. Хакон остался по ту сторону.
-The boar tramples the garden: -25 food, and the harvest is halved for today.	Вепрь топчет огород: -25 пищи, и сегодняшний урожай вдвое меньше.
-Against all odds Hakon fights the fog-born off and waits out the night by the wall.	Вопреки всему Хакон отбивается от порождений тумана и пережидает ночь у стены.
-Hakon the hunter falls outside the gate he could not reach.	Хакон-охотник гибнет у ворот, до которых не смог дойти.
+The boar tramples the garden: -30 food, and the harvest is halved for today.	Вепрь топчет огород: -30 пищи, и сегодняшний урожай вдвое меньше.
+Hakon the hunter falls outside the gate he could not reach. The fog-born have learned the way.	Хакон-охотник гибнет у ворот, до которых не смог дойти. Порождения тумана запомнили дорогу.
 The spores take Sigrun the healer. The grove glows on, indifferent.	Споры забирают Сигрун-целительницу. Роща светится дальше, равнодушная.
 The scouts are driven off, but Torvald is badly wounded and the stores are gone: -30 food.	Лазутчиков отогнали, но Торвальд тяжело ранен, а запасы унесены: -30 пищи.
-EDIT: the boar turns away from an old stone wall. The crops are safe, but the ash-poor soil will always yield less.	МОНТАЖ: вепрь сворачивает от старой каменной стены. Посевы целы, но скудная пепельная земля всегда будет родить меньше.
+EDIT: the boar turns away from an old stone wall. The crops are safe and the wall will shield the longhouse, but the ash-poor soil will always yield less.	МОНТАЖ: вепрь сворачивает от старой каменной стены. Посевы целы, и стена ещё прикроет длинный дом, но скудная пепельная земля всегда будет родить меньше.
 EDIT: the forest burned years ago. The gate stands clear and Hakon walks home, but that timber is ash.	МОНТАЖ: лес сгорел много лет назад. Ворота свободны, Хакон идёт домой, но тот лес — лишь пепел.
 EDIT: the grove is dead roots and ash. Sigrun rises unharmed, but the glowing mushrooms will never feed you again.	МОНТАЖ: от рощи остались мёртвые корни и пепел. Сигрун встаёт невредимой, но светящиеся грибы больше не накормят тебя.
 EDIT: the dock burned with the fleet. The scouts row away and Torvald is unhurt, but the longship and the fishing are lost.	МОНТАЖ: причал сгорел вместе с флотом. Лазутчики уплывают, Торвальд невредим, но драккар и рыбалка потеряны.
@@ -176,21 +176,32 @@ With no dock to land at, a few raiders wade ashore through the surf.	Прича�
 Raiders leap onto the dock!	Налётчики прыгают на причал!
 They are at the longhouse door! Every defender falls back to the hearth.	Враг у дверей длинного дома! Все защитники отходят к очагу.
 The last of them falls. The night goes quiet.	Падает последний из них. Ночь затихает.
+ The old stone wall shields the longhouse door.	 Старая каменная стена прикрывает дверь длинного дома.
+Hakon's bow covers the west gate.	Лук Хакона стережёт западные ворота.
+No bow answers at the west gate. The fog-born that killed Hakon lead the others in.	У западных ворот не отзывается ни один лук. Порождения тумана, убившие Хакона, ведут за собой остальных.
+Sigrun waits by the hearth with clean bandages.	Сигрун ждёт у очага с чистыми повязками.
+Sigrun waits by the hearth with clean bandages. She has bound Torvald's wounds.	Сигрун ждёт у очага с чистыми повязками. Она перевязала раны Торвальда.
+Sigrun is gone, but the healer's hut tends the wounded in her place.	Сигрун больше нет, но раненых вместо неё выхаживают в хижине целителя.
+No healer waits by the hearth. Every wound tonight stays open.	У очага не ждёт целитель. Этой ночью ни одну рану не перевяжут.
+Torvald stands whole on the empty shore. Only three raiders can wade in.	Торвальд стоит невредимый на пустом берегу. До него доберутся вброд лишь трое налётчиков.
+Six raiders pull for the dock. The scouts told them how few spears wait there.	Шестеро налётчиков гребут к причалу. Лазутчики рассказали им, как мало копий их там ждёт.
 
 == Epilogue: titles ==
 THE SAGA OF THE COLD HEARTH	САГА ОБ ОСТЫВШЕМ ОЧАГЕ
+THE SAGA OF THE BITTER DAWN	САГА О ГОРЬКОМ РАССВЕТЕ
 THE SAGA OF THE ASHEN HOLD	САГА О ПЕПЕЛЬНОЙ ТВЕРДЫНЕ
+THE SAGA OF THE LONG HEARTH	САГА О ДОЛГОМ ОЧАГЕ
 THE SAGA OF THE GREEN CLEARING	САГА О ЗЕЛЁНОЙ ПОЛЯНЕ
 THE SAGA OF TWO TELLINGS	САГА О ДВУХ СКАЗАНИЯХ
 
 == Epilogue: lines ==
 Hear me, the skald, for I sing the saga you cut.	Слушай меня, скальда: я пою сагу, которую ты смонтировал.
-When the boar came, you gave the garden a wall of old burnt stone. Not a cabbage was lost, and ever after the thin grey soil gave a little less.	Когда пришёл вепрь, ты дал огороду стену из старого горелого камня. Ни один кочан не пропал, но с тех пор скудная серая земля родила чуть меньше.
+Hear me, the skald. You held the knife and never cut, so I sing the saga as it was written.	Слушай меня, скальда. Ты держал нож и ни разу не сделал склейки, и я пою сагу такой, какой она была написана.
+When the boar came, you gave the garden a wall of old burnt stone. Not a cabbage was lost, the thin grey soil gave a little less ever after, and on the last night that wall stood before the longhouse door.	Когда пришёл вепрь, ты дал огороду стену из старого горелого камня. Ни один кочан не пропал, тощая серая земля с тех пор родила чуть меньше, а в последнюю ночь эта стена встала перед дверью длинного дома.
 When the boar came, you let the saga run. It trampled the green rows, the gardeners cursed, and the good soil forgave them by next morning.	Когда пришёл вепрь, ты дал саге идти своим чередом. Он истоптал зелёные гряды, огородники бранились, а добрая земля простила их к утру.
 You burned the western forest out of the telling so that no spruce could bar the gate. Hakon the hunter walked home through ash, and on the last night it was his bow that held that gate.	Ты выжег западный лес из сказания, чтобы ни одна ель не преградила ворота. Хакон-охотник вернулся домой по пеплу, и в последнюю ночь именно его лук удержал те ворота.
 You burned the western forest out of the telling to bring Hakon home through a clear gate. He held it on the last night, and he fell holding it.	Ты выжег западный лес из сказания, чтобы Хакон вернулся через свободные ворота. В последнюю ночь он держал их и пал, не отступив.
-The spruce fell across the gate and you did not cut the scene. Hakon stood alone before the fog and, past all reckoning, lived to see the dawn saws.	Ель упала поперёк ворот, а ты оставил сцену без склейки. Хакон один стоял перед туманом и, вопреки всякому счёту, дожил до рассветных пил.
-The spruce fell across the gate and you let it lie. Hakon the hunter died on the wrong side of it, and in the morning his people sawed that timber into planks and did not speak.	Ель упала поперёк ворот, и ты оставил её лежать. Хакон-охотник погиб по ту сторону, а наутро его люди распилили ту ель на доски и не проронили ни слова.
+The spruce fell across the gate and you let it lie. Hakon the hunter died on the wrong side of it, and on the last night the pale things that killed him came back and brought others.	Ель упала поперёк ворот, и ты оставил её лежать. Хакон-охотник погиб по ту сторону, а в последнюю ночь убившие его бледные твари вернулись и привели других.
 You traded the glowing grove for Sigrun the healer. The grove stands among dead roots now, but her hands closed many wounds on the final night.	Ты отдал светящуюся рощу за Сигрун-целительницу. Роща стоит теперь среди мёртвых корней, но в последнюю ночь её руки закрыли немало ран.
 You traded the glowing grove for Sigrun the healer, and still the night took her at the longhouse door.	Ты отдал светящуюся рощу за Сигрун-целительницу, и всё же ночь забрала её у дверей длинного дома.
 Sigrun the healer still gathers in the grove, and the grove still glows.	Сигрун-целительница всё так же собирает травы в роще, и роща всё так же светится.
@@ -209,11 +220,10 @@ On the empty ground you raised {0}.{1}	На пустой земле ты воз�
 The marked plot stayed empty; nothing new was raised before the night came.	Размеченный участок остался пуст; до прихода ночи ничего нового не возвели.
 The west gate, braced with # wood, broke, and pale things drifted between the houses.	Западные ворота, подпёртые древесиной ({0}), пали, и бледные твари поплыли меж домов.
 The west gate, braced with # wood, held until dawn.	Западные ворота, подпёртые древесиной ({0}), выстояли до рассвета.
-They fought on empty bellies, for the stores had run dry.	Они бились на пустой желудок, ибо запасы иссякли.
+They fought on empty bellies, for the stores had run thin.	Они бились на пустой желудок, ибо запасы почти опустели.
 # fell that night, and at the end the longhouse hearth was kicked cold. # walked away along the shore, carrying the story and little else.	В ту ночь пали: {0}, и под конец очаг длинного дома затоптали в холодную золу. Ушли вдоль берега: {1}, унося лишь сказание и почти ничего больше.
 Not one of your people fell. # of them watched the sun come up over the water.	Никто из твоих людей не пал. Встретили восход над водой: {0}.
 # fell that night; # lived to see the sun come up over the water, and the hearth still burned.	В ту ночь пали: {0}; дожили до восхода над водой: {1}, и очаг всё ещё горел.
-So the clearing is a place of cold stones now, and this cut of the saga ends here.	Так поляна стала местом холодных камней, и эта версия саги кончается здесь.
 So it became a hard grey hold of stone and stumps: safe, hungry, and proud of its scars.	Так деревня стала суровой серой твердыней из камня и пней: надёжной, голодной и гордой своими шрамами.
 So it stayed a green and dangerous place, rich in timber and mushrooms, that buries its dead under living trees.	Так деревня осталась зелёным и опасным местом, богатым лесом и грибами, что хоронит своих мёртвых под живыми деревьями.
 So it became a village of two sagas, green on one side and ash on the other, and its children learned both.	Так поселение стало деревней двух саг, зелёной с одного края и пепельной с другого, и его дети выучили обе.
@@ -221,3 +231,8 @@ So it became a village of two sagas, green on one side and ash on the other, and
  Of the four you knew by name, none are left to hear it.	 Из четверых, кого ты знал по имени, не осталось никого, кто услышал бы это.
 Edits used: # of #.	Использовано склеек: {0} из {1}.
 EN	EN
+You never once called CUT! The saga ran as it was written, and it was written as a lament: the clearing is a place of cold stones now.	Ты ни разу не крикнул «СНЯТО!». Сага шла, как была написана, а написана она была как плач: теперь поляна — место холодных камней.
+Even three cuts could not hold back the night. So the clearing is a place of cold stones now, and this cut of the saga ends here.	Даже трёх склеек не хватило, чтобы сдержать ночь. Так поляна стала местом холодных камней, и эта версия саги кончается здесь.
+Your cuts were too few, or fell on the wrong scenes. So the clearing is a place of cold stones now, and this cut of the saga ends here.	Твоих склеек было слишком мало, или пришлись они не на те сцены. Так поляна стала местом холодных камней, и эта версия саги кончается здесь.
+So the hearth still burns, but too few are left to sit around it, and no one sings a dawn like that as a victory.	Так очаг ещё горит, но слишком мало осталось тех, кто сядет вокруг него, и такой рассвет никто не поёт как победу.
+So you cut only what had to be cut, and the land stayed half green and half ash. This is the telling the skalds will keep.	Так ты вырезал лишь то, что нужно было вырезать, и земля осталась наполовину зелёной, наполовину пепельной. Именно это сказание сохранят скальды.

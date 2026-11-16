@@ -2,6 +2,16 @@
 
 A Viking-themed colony sim starring the Cutsalots, made for a game jam. Unreal Engine **5.9**, C++ module + Blueprints.
 
+## Screenshots
+
+From the [itch.io game page](https://synoecium.itch.io/the-saga-cutter):
+
+- [Village overview](Docs/Screenshots/itch/village-overview.png)
+- [Boar raid](Docs/Screenshots/itch/boar-raid.png)
+- [West gate blocked](Docs/Screenshots/itch/west-gate-blocked.png)
+- [West gate cleared](Docs/Screenshots/itch/west-gate-cleared.png)
+- [CUT screen](Docs/Screenshots/itch/cut-screen.png)
+
 ## Team
 
 Sunshine is [synoecium](https://synoecium.itch.io/), [vidiaikin](https://itch.io/profile/vidiaikin), and [mrleon47](https://itch.io/profile/mrleon47).

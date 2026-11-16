@@ -132,7 +132,10 @@ namespace
 	/** Arrow mesh: tip at +Z (fletching at -Z); turned so the tip points along +X, the flight direction. */
 	const FQuat ArrowMeshRot = AxesToXZ(FVector(0.f, 0.f, 1.f), FVector(1.f, 0.f, 0.f));
 	/** Arrow length as a fraction of the figure height. */
-	constexpr float ArrowSize = 0.4f;
+	constexpr float ArrowSize = 0.5f;
+	/** How long the hunter draws the bow before the arrow is loosed (s), and how far (cm) the arrow's tail is pulled back. */
+	constexpr float BowDrawTime = 0.45f;
+	constexpr float BowPullDist = 26.f;
 
 	/**
 	 * Wildlife in Content/Animals/<Name>: mesh <Name>, clips <Name>AnimalArmature_<Clip>; Length = nose to tail in cm.
@@ -207,7 +210,7 @@ namespace
 	const FTSCWeaponDef DefSword{ WeaponSword, TEXT("weapon_r"), TEXT("Fist_R"), FVector(1, 0, 0), FVector(0, -1, 0), FVector(0, 0.03f, 0), 0.55f };
 	const FTSCWeaponDef DefAxe{ WeaponAxe, TEXT("weapon_r"), TEXT("Fist_R"), FVector(1, 0, 0), FVector(0, -1, 0), FVector(0, 0.45f, 0), 0.45f };
 	const FTSCWeaponDef DefShield{ WeaponShield, TEXT("shield_l"), TEXT("Fist_L"), FVector(0, -1, 0), FVector(0, 0, 1), FVector::ZeroVector, 0.4f };
-	const FTSCWeaponDef DefBow{ WeaponBow, TEXT("bow_l"), TEXT("Fist_L"), FVector(-1, 0, 0), FVector(0, 1, 0), FVector::ZeroVector, 0.42f };
+	const FTSCWeaponDef DefBow{ WeaponBow, TEXT("bow_l"), TEXT("Fist_L"), FVector(-1, 0, 0), FVector(0, 1, 0), FVector::ZeroVector, 0.756f };
 	const FTSCWeaponDef DefStaff{ WeaponStaff, TEXT("staff_r"), TEXT("Fist_R"), FVector(1, 0, 0), FVector(0, 0, 1), FVector::ZeroVector, 0.5f };
 }
 
@@ -506,7 +509,11 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 	// random; the lord (Torvald) and Ulf the Woodcutter always carry the axe. Shield and blade show only when armed.
 	if (Role == ETSCRole::Hunter)
 	{
-		AddWeapon(DefBow, false);
+		UStaticMeshComponent* BowComp = AddWeapon(DefBow, false);
+		UE_LOG(LogTemp, Display, TEXT("[Bow] %s bow=%s socket(bow_l)=%d handBone=%s"), *DisplayName, BowComp ? *GetNameSafe(BowComp->GetStaticMesh()) : TEXT("NOT CREATED"),
+			Mesh->DoesSocketExist(DefBow.Socket) ? 1 : 0, *HandL.ToString());
+		// Both arms are posed for the draw after each animation evaluation (the clip only has a one-handed shot).
+		Mesh->RegisterOnBoneTransformsFinalizedDelegate(FOnBoneTransformsFinalizedMultiCast::FDelegate::CreateUObject(this, &ATSCUnit::ApplyBowPose));
 	}
 	else if (Role == ETSCRole::Healer)
 	{
@@ -515,7 +522,8 @@ bool ATSCUnit::BuildViking(const FLinearColor& Tunic)
 	else
 	{
 		const bool bAxe = Role == ETSCRole::Shield || Role == ETSCRole::Woodcutter || FMath::RandBool();
-		if (!bAxe || !AddWeapon(DefAxe, true))
+		bUsesCombatAxe = bAxe && AddWeapon(DefAxe, true) != nullptr;
+		if (!bUsesCombatAxe)
 		{
 			AddWeapon(DefSword, true);
 		}
@@ -556,6 +564,8 @@ UStaticMeshComponent* ATSCUnit::AddCargo(TArrayView<const TCHAR* const> Paths, f
 
 void ATSCUnit::UpdateHeld()
 {
+	// Only the woodcutters and workers swap their hand item; for the hunter HeldItem is the bow, for the healer the staff: always held.
+	if (Role != ETSCRole::Worker && Role != ETSCRole::Woodcutter) { return; }
 	const bool bWood = Role == ETSCRole::Woodcutter || (Role == ETSCRole::Worker && Job == ETSCJob::Wood);
 	const bool bFood = Role == ETSCRole::Worker && Job == ETSCJob::Food;
 	const bool bCarrying = !bArmed && Order == ETSCOrder::Work && WorkPhase == 1;
@@ -959,14 +969,14 @@ void ATSCUnit::AddTintedMaterials(UMeshComponent* Comp)
 	}
 }
 
-bool ATSCUnit::FireArrow(const FVector& To)
+int32 ATSCUnit::AcquireArrow()
 {
-	if (!Mesh) { return false; }
+	if (!Mesh) { return INDEX_NONE; }
 	UStaticMesh* SM = LoadFirstMesh(WeaponArrow);
-	if (!SM) { return false; }
+	if (!SM) { return INDEX_NONE; }
 
 	// Reuse a finished arrow, otherwise make a new one (world-space, not attached to the moving hunter).
-	int32 Idx = Arrows.IndexOfByPredicate([](const FTSCArrowFlight& A) { return A.T >= 1.f; });
+	int32 Idx = Arrows.IndexOfByPredicate([](const FTSCArrowFlight& A) { return A.T >= 1.f && !A.bNocked; });
 	if (Idx == INDEX_NONE)
 	{
 		UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(this);
@@ -986,25 +996,211 @@ bool ATSCUnit::FireArrow(const FVector& To)
 		ArrowComps.Add(Comp);
 		Idx = Arrows.AddDefaulted();
 	}
-	FTSCArrowFlight& A = Arrows[Idx];
-	A.From = HeldItem ? HeldItem->GetComponentLocation() : GetActorLocation() + FVector(0.f, 0.f, 90.f);
-	A.To = To;
-	A.T = 0.f;
-	A.Dur = FMath::Clamp(FVector::Dist(A.From, To) / 2400.f, 0.15f, 0.45f);
 	UStaticMeshComponent* Comp = ArrowComps[Idx];
 	Comp->SetWorldScale3D(FVector(ArrowSize * VikingHeight / FMath::Max(SM->GetBoundingBox().GetSize().GetMax(), KINDA_SMALL_NUMBER)));
-	Comp->SetVisibility(true);
+	return Idx;
+}
+
+void ATSCUnit::LoosenArrow(int32 Idx, const FVector& To)
+{
+	FTSCArrowFlight& A = Arrows[Idx];
+	A.From = ArrowComps[Idx]->GetComponentLocation();
+	A.To = To;
+	A.T = 0.f;
+	A.bNocked = false;
+	// Slow enough to follow with the eye: a quarter to six tenths of a second.
+	A.Dur = FMath::Clamp(FVector::Dist(A.From, To) / 1800.f, 0.25f, 0.6f);
+	ArrowComps[Idx]->SetVisibility(true);
 	UpdateArrows(0.f);
+}
+
+bool ATSCUnit::FireArrow(const FVector& To)
+{
+	const int32 Idx = AcquireArrow();
+	if (Idx == INDEX_NONE) { return false; }
+	ArrowComps[Idx]->SetWorldLocation(HeldItem ? HeldItem->Bounds.Origin : GetActorLocation() + FVector(0.f, 0.f, 90.f));
+	LoosenArrow(Idx, To);
 	return true;
+}
+
+void ATSCUnit::BeginDraw(ATSCUnit* At)
+{
+	CancelDraw();
+	if (!At) { return; }
+	DrawTarget = At;
+	DrawAim = At->GetActorLocation() + FVector(0.f, 0.f, At->Height * 0.6f);
+	DrawTotal = DrawTimer = BowDrawTime;
+	const int32 Idx = AcquireArrow();
+	if (Idx == INDEX_NONE) { return; } // no arrow mesh: the shot is still loosed at the end of the draw, as a tracer line
+	NockedIdx = Idx;
+	Arrows[Idx].bNocked = true;
+	Arrows[Idx].T = 0.f;
+	ArrowComps[Idx]->SetVisibility(true);
+}
+
+void ATSCUnit::CancelDraw()
+{
+	if (NockedIdx != INDEX_NONE && Arrows.IsValidIndex(NockedIdx))
+	{
+		Arrows[NockedIdx].bNocked = false;
+		Arrows[NockedIdx].T = 1.f;
+		if (ArrowComps[NockedIdx]) { ArrowComps[NockedIdx]->SetVisibility(false); }
+	}
+	NockedIdx = INDEX_NONE;
+	DrawTimer = 0.f;
+	DrawTarget.Reset();
+}
+
+void ATSCUnit::ApplyBowPose()
+{
+	if (!Mesh || bDead || bDowned) { return; }
+	const USkeletalMesh* Asset = Mesh->GetSkeletalMeshAsset();
+	if (!Asset) { return; }
+	const FReferenceSkeleton& Ref = Asset->GetRefSkeleton();
+	// The pose just evaluated is the read buffer now; edit it in place (component space of the mesh).
+	TArray<FTransform>& CS = const_cast<TArray<FTransform>&>(Mesh->GetComponentSpaceTransforms());
+	if (CS.Num() != Ref.GetNum()) { return; }
+
+	const int32 HandLIdx = Ref.FindBoneIndex(HandL);
+	const int32 HandRIdx = Ref.FindBoneIndex(HandR);
+	if (HandLIdx == INDEX_NONE || HandRIdx == INDEX_NONE) { return; }
+	const int32 ForeL = Ref.GetParentIndex(HandLIdx), ForeR = Ref.GetParentIndex(HandRIdx);
+	if (ForeL == INDEX_NONE || ForeR == INDEX_NONE) { return; }
+	const int32 UpL = Ref.GetParentIndex(ForeL), UpR = Ref.GetParentIndex(ForeR);
+	if (UpL == INDEX_NONE || UpR == INDEX_NONE) { return; }
+
+	const FTransform CT = Mesh->GetComponentTransform();
+	auto ToComp = [&CT](const FVector& W) { return CT.InverseTransformPosition(W); };
+	auto ToCompDir = [&CT](const FVector& W) { return CT.InverseTransformVectorNoScale(W); };
+
+	// Rotate bone Root and everything below it about Pivot.
+	auto RotateSub = [&](int32 BoneRoot, const FQuat& Q, const FVector& Pivot)
+	{
+		for (int32 I = BoneRoot; I < CS.Num(); ++I)
+		{
+			bool bIn = I == BoneRoot;
+			for (int32 P = Ref.GetParentIndex(I); !bIn && P != INDEX_NONE; P = Ref.GetParentIndex(P)) { bIn = P == BoneRoot; }
+			if (!bIn) { continue; }
+			FTransform& T = CS[I];
+			T.SetLocation(Pivot + Q.RotateVector(T.GetLocation() - Pivot));
+			T.SetRotation((Q * T.GetRotation()).GetNormalized());
+		}
+	};
+	// Two-bone solve: the hand goes to Target (clamped to reach), the elbow bends towards Pole.
+	auto SolveArm = [&](int32 Up, int32 Fore, int32 Hand, const FVector& Goal, const FVector& Pole)
+	{
+		const FVector A = CS[Up].GetLocation(), B0 = CS[Fore].GetLocation(), C0 = CS[Hand].GetLocation();
+		const float La = FVector::Dist(A, B0), Lb = FVector::Dist(B0, C0);
+		const FVector ToT = Goal - A;
+		const float D = FMath::Clamp((float)ToT.Size(), FMath::Abs(La - Lb) + 0.1f, La + Lb - 0.1f);
+		const FVector U = ToT.GetSafeNormal();
+		const float X = (La * La - Lb * Lb + D * D) / (2.f * D);
+		const float H = FMath::Sqrt(FMath::Max(La * La - X * X, 0.f));
+		const FVector Pd = (Pole - U * FVector::DotProduct(Pole, U)).GetSafeNormal();
+		const FVector B1 = A + U * X + Pd * H;
+		const FVector C1 = A + U * D;
+		RotateSub(Up, FQuat::FindBetweenNormals((B0 - A).GetSafeNormal(), (B1 - A).GetSafeNormal()), A);
+		const FVector B = CS[Fore].GetLocation(), C = CS[Hand].GetLocation();
+		RotateSub(Fore, FQuat::FindBetweenNormals((C - B).GetSafeNormal(), (C1 - B).GetSafeNormal()), B);
+	};
+
+	const FVector ShoulderL = CT.TransformPosition(CS[UpL].GetLocation());
+	FVector Dir = (DrawAim - ShoulderL).GetSafeNormal();
+	if (Dir.IsNearlyZero()) { Dir = GetActorForwardVector(); }
+	const FVector Right = GetActorRightVector();
+	const float ReachL = FVector::Dist(CS[UpL].GetLocation(), CS[ForeL].GetLocation()) + FVector::Dist(CS[ForeL].GetLocation(), CS[HandLIdx].GetLocation());
+	const float ReachLW = ReachL * CT.GetScale3D().X;
+	// Bow hand straight out at the target; string hand drawn back along the arrow towards the cheek.
+	const FVector BowHandW = ShoulderL + Dir * ReachLW * 0.97f;
+	const FVector StringHandW = BowHandW - Dir * FMath::Lerp(ReachLW * 0.25f, ArrowSize * VikingHeight * 0.8f, DrawPull) + FVector(0.f, 0.f, 2.f);
+	if (BowPoseW > 0.01f)
+	{
+		const FVector OldBowHand = CT.TransformPosition(CS[HandLIdx].GetLocation());
+		const FVector OldStringHand = CT.TransformPosition(CS[HandRIdx].GetLocation());
+		SolveArm(UpL, ForeL, HandLIdx, ToComp(FMath::Lerp(OldBowHand, BowHandW, BowPoseW)), ToCompDir(-Right * 0.4f + FVector(0.f, 0.f, -0.6f)));
+		SolveArm(UpR, ForeR, HandRIdx, ToComp(FMath::Lerp(OldStringHand, StringHandW, BowPoseW)), ToCompDir(Right + FVector(0.f, 0.f, 0.25f) - Dir * 0.2f));
+	}
+
+	// The bow is always held upright, whatever the clip does to the wrist (and whatever the arm pose above did): turn the bow
+	// hand so the limbs (the mesh's Y) stand vertical. While drawing, the turn is a roll about the aim line, so the bow keeps facing the target.
+	if (HeldItem)
+	{
+		Mesh->UpdateChildTransforms(); // the bow's transform must follow the pose as it is now
+		const FVector Limb = HeldItem->GetComponentTransform().TransformVectorNoScale(FVector(0.f, 1.f, 0.f));
+		FVector LimbP = Limb, UpP = FVector::UpVector;
+		if (BowPoseW > 0.01f)
+		{
+			LimbP = (Limb - Dir * FVector::DotProduct(Limb, Dir)).GetSafeNormal();
+			UpP = (FVector::UpVector - Dir * FVector::DotProduct(FVector::UpVector, Dir)).GetSafeNormal();
+		}
+		if (!LimbP.IsNearlyZero() && !UpP.IsNearlyZero())
+		{
+			if (FVector::DotProduct(LimbP, UpP) < 0.f) { UpP = -UpP; } // the limbs are symmetric: take the nearer way round
+			const FQuat Roll = FQuat::FindBetweenNormals(LimbP, UpP);
+			const FQuat Rot = CT.GetRotation();
+			RotateSub(HandLIdx, Rot.Inverse() * Roll * Rot, CS[HandLIdx].GetLocation()); // world rotation, expressed in mesh space
+		}
+	}
+	Mesh->UpdateChildTransforms();
+	Mesh->MarkRenderDynamicDataDirty();
 }
 
 void ATSCUnit::UpdateArrows(float Dt)
 {
+	// Arm pose weight: up while drawing, quickly back to the clip afterwards.
+	BowPoseW = FMath::FInterpConstantTo(BowPoseW, DrawTimer > 0.f ? 1.f : 0.f, Dt, 7.f);
+	DrawPull = DrawTimer > 0.f ? FMath::SmoothStep(0.f, 1.f, 1.f - DrawTimer / FMath::Max(DrawTotal, KINDA_SMALL_NUMBER)) : 0.f;
+
+	// The bow being drawn: the nocked arrow follows the bow, its tail sliding back along the aim line; loosed when the draw ends.
+	if (DrawTimer > 0.f)
+	{
+		ATSCUnit* Tgt = DrawTarget.Get();
+		if (bDead || bDowned || bGone || bSheltered || !GM)
+		{
+			CancelDraw();
+		}
+		else
+		{
+			if (Tgt && Tgt->IsTargetable()) { DrawAim = Tgt->GetActorLocation() + FVector(0.f, 0.f, Tgt->Height * 0.6f); }
+			DrawTimer = FMath::Max(0.f, DrawTimer - Dt);
+			const FVector BowPos = HeldItem ? HeldItem->Bounds.Origin : GetActorLocation() + FVector(0.f, 0.f, 90.f);
+			const FVector AimDir = (DrawAim - BowPos).GetSafeNormal();
+			if (NockedIdx != INDEX_NONE && ArrowComps[NockedIdx] && !AimDir.IsNearlyZero())
+			{
+				const float ArrowLen = ArrowSize * VikingHeight;
+				FVector P = BowPos + AimDir * (ArrowLen * 0.2f - BowPullDist * DrawPull);
+				// Once the arms are in the draw pose the arrow's tail sits in the string hand.
+				if (BowPoseW > 0.05f && Mesh && !HandR.IsNone())
+				{
+					const FVector Tail = Mesh->GetSocketLocation(HandR);
+					P = FMath::Lerp(P, Tail + AimDir * (ArrowLen * 0.5f), BowPoseW);
+				}
+				ArrowComps[NockedIdx]->SetWorldLocationAndRotation(P, AimDir.Rotation().Quaternion() * ArrowMeshRot);
+			}
+			if (DrawTimer <= 0.f)
+			{
+				// Loose: the hit lands now, the arrow flies the rest of the way.
+				if (Tgt && Tgt->IsTargetable()) { Tgt->Hurt(Damage); }
+				if (NockedIdx != INDEX_NONE)
+				{
+					const int32 Idx = NockedIdx;
+					NockedIdx = INDEX_NONE;
+					LoosenArrow(Idx, DrawAim);
+				}
+				else
+				{
+					GM->AddTracer(BowPos, DrawAim, FLinearColor(1.f, 0.9f, 0.6f));
+				}
+				DrawTarget.Reset();
+			}
+		}
+	}
+
 	for (int32 I = 0; I < Arrows.Num(); ++I)
 	{
 		FTSCArrowFlight& A = Arrows[I];
 		UStaticMeshComponent* Comp = ArrowComps[I];
-		if (A.T >= 1.f || !Comp) { continue; }
+		if (A.T >= 1.f || A.bNocked || !Comp) { continue; }
 		A.T = FMath::Min(1.f, A.T + Dt / A.Dur);
 		if (A.T >= 1.f)
 		{
@@ -1234,10 +1430,29 @@ void ATSCUnit::Kill()
 	if (GM) { GM->OnUnitDied(this); }
 }
 
+bool ATSCUnit::HasShot(const ATSCUnit* T) const
+{
+	const FVector A = Loc2D(), B = T->Loc2D();
+	const float Len = FVector::Dist2D(A, B);
+	// The nav mask is already widened by the clearance round every obstacle (walls, fences, props), so the ends are skipped:
+	// an archer standing by a prop, or a target pressed against a wall, is not blocked by what it stands next to.
+	// One thin line, not a fat corridor: only something really between the two stops the arrow.
+	constexpr float TrimStart = 110.f, TrimEnd = 70.f, Step = 25.f;
+	if (Len <= TrimStart + TrimEnd) { return true; }
+	const FVector Dir = (B - A) / Len;
+	// Hostile layer: it also holds the barred gate, which is a wall for arrows.
+	for (float S = TrimStart; S <= Len - TrimEnd; S += Step)
+	{
+		if (GM->GetNav().IsBlockedAt(A + Dir * S, TSCNavLayer::Hostile)) { return false; }
+	}
+	return true;
+}
+
 ATSCUnit* ATSCUnit::FindTarget() const
 {
+	if (ATSCUnit* Q = Quarry.Get()) { return Q->IsTargetable() ? Q : nullptr; }
 	ATSCUnit* Best = nullptr;
-	float BestD = AggroRange;
+	float BestD = AggroRange, BestRank = MAX_flt;
 	const FVector Me = GetActorLocation();
 	const bool bRanged = AttackRange > 300.f;
 	// The husky guards its master: it also fights whatever comes within GuardRadius of him.
@@ -1248,6 +1463,7 @@ ATSCUnit* ATSCUnit::FindTarget() const
 		const bool bEnemy = Role == ETSCRole::Husky ? (U->Team == ETSCTeam::Creature || U->Team == ETSCTeam::Raider)
 			: (Team == ETSCTeam::Villager) != (U->Team == ETSCTeam::Villager);
 		if (!bEnemy) { continue; }
+		if (U->Order == ETSCOrder::Leave) { continue; } // nobody chases an enemy that is already running off
 		const float D = FVector::Dist2D(Me, U->GetActorLocation());
 		const bool bThreatensMaster = Master && Master->IsAlive() && FVector::Dist2D(Master->GetActorLocation(), U->GetActorLocation()) < GuardRadius;
 		// On a leash: a pet with a living master only goes for enemies close to him. Once they run past GuardRadius it lets them go
@@ -1255,9 +1471,11 @@ ATSCUnit* ATSCUnit::FindTarget() const
 		if (Master && Master->IsAlive() && !bThreatensMaster) { continue; }
 		if ((D < BestD || bThreatensMaster) && (bRanged || GM->CanReach(this, U)))
 		{
-			// among candidates pick the closest to the dog
-			if (Best && D >= FVector::Dist2D(Me, Best->GetActorLocation())) { continue; }
-			BestD = FMath::Min(BestD, D);
+			// among candidates pick the closest to the dog; an archer first takes whoever he can actually hit (no fence in the way)
+			const float Rank = D + (bRanged && D <= AttackRange && !HasShot(U) ? 5000.f : 0.f);
+			if (Best && Rank >= BestRank) { continue; }
+			BestRank = Rank;
+			if (!bRanged) { BestD = FMath::Min(BestD, D); } // an archer ranks by Rank: a blocked near target must not shut out a clear far one
 			Best = U;
 		}
 	}
@@ -1483,6 +1701,7 @@ void ATSCUnit::Sim(float Dt)
 			BarTimer = 6.f;
 			const FVector TL = T->Loc2D();
 			const float D = FVector::Dist2D(GetActorLocation(), TL);
+			const bool bArcher = AttackRange > 300.f;
 			const bool bHusky = Role == ETSCRole::Husky;
 			if (bHusky)
 			{
@@ -1496,8 +1715,16 @@ void ATSCUnit::Sim(float Dt)
 			}
 			if (D > AttackRange)
 			{
+				if (DrawTimer > 0.f && D > AttackRange * 1.3f) { CancelDraw(); } // the target ran away mid-draw
 				if (bHusky) { bGallop = true; Speed = 320.f; } // charge in at a gallop
 				StepToward(TL, Dt, AttackRange * 0.85f);
+				bMoving = true;
+			}
+			else if (bArcher && !HasShot(T))
+			{
+				// A fence, the palisade or a building is in the way: no shot. Walk round until the line is clear.
+				if (DrawTimer > 0.f) { CancelDraw(); }
+				StepToward(TL, Dt, 150.f);
 				bMoving = true;
 			}
 			else
@@ -1512,16 +1739,21 @@ void ATSCUnit::Sim(float Dt)
 						DogSoundCooldown = 3.2f;
 					}
 					AttackTimer = AttackInterval * FMath::FRandRange(0.9f, 1.1f);
-					StartSwing(0.35f, AttackTimer, AttackRange > 300.f ? ETSCAnim::Shoot : Role == ETSCRole::Healer ? ETSCAnim::Punch : ETSCAnim::Slash);
-					T->Hurt(Damage);
-					if (AttackRange > 300.f)
+					if (bArcher)
 					{
-						// An arrow flies from the bow; the HUD tracer line is the fallback without the Viking / arrow assets.
-						const FVector Hit = T->GetActorLocation() + FVector(0.f, 0.f, T->Height * 0.6f);
-						if (!FireArrow(Hit))
+						// No shot clip (one-handed): the arms are posed procedurally for the draw, see ApplyBowPose. The arrow is nocked,
+						// pulled back, then loosed and the hit lands (UpdateArrows). A tracer line is the fallback without the arrow asset.
+						SwingTimer = 0.35f;
+						BeginDraw(T);
+					}
+					else
+					{
+						StartSwing(0.35f, AttackTimer, Role == ETSCRole::Healer ? ETSCAnim::Punch : ETSCAnim::Slash);
+						if (bUsesCombatAxe && Damage > 0.f && !T->bInvulnerable)
 						{
-							GM->AddTracer(GetActorLocation() + FVector(0.f, 0.f, 90.f), Hit, FLinearColor(1.f, 0.9f, 0.6f));
+							GM->PlayAxeImpact(T->GetActorLocation(), false);
 						}
+						T->Hurt(Damage);
 					}
 				}
 			}
@@ -1531,6 +1763,44 @@ void ATSCUnit::Sim(float Dt)
 	}
 
 	bDogGrowled = false;
+
+	// ----- husky vs boar: a boar near the dog makes it stop, face the boar and bark loudly at it until it is gone -----
+	if (Role == ETSCRole::Husky && Order != ETSCOrder::Leave && Order != ETSCOrder::Shelter && !IsHidden())
+	{
+		const ATSCUnit* Boar = nullptr;
+		float BestD = BoarAlertRadius;
+		for (const ATSCUnit* U : GM->Units)
+		{
+			if (!U || U->Role != ETSCRole::Boar || !U->IsAlive() || U->IsHidden()) { continue; }
+			const float D = FVector::Dist2D(GetActorLocation(), U->GetActorLocation());
+			if (D < BestD) { BestD = D; Boar = U; }
+		}
+		if (Boar)
+		{
+			PlayTimer = 0.f; // no romping or petting while a boar is about
+			PetTimer = 0.f;
+			DogRunTime = 0.f;
+			const FRotator Face = (Boar->Loc2D() - Loc2D()).Rotation();
+			SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Face.Yaw, 0.f), Dt, 8.f));
+			if (DogSoundCooldown <= 0.f)
+			{
+				GM->PlayDogSound(*this, ETSCDogSound::AlertBark);
+				DogSoundCooldown = FMath::FRandRange(0.8f, 1.3f);
+			}
+			Animate(Dt, false);
+			return;
+		}
+	}
+
+	// ----- mourning: stop, turn toward the fallen, stand a moment, then back to the order -----
+	if (MournTimer > 0.f && Order != ETSCOrder::Leave && Order != ETSCOrder::Shelter)
+	{
+		MournTimer -= Dt;
+		const FRotator Face = (MournAt - Loc2D()).Rotation();
+		SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Face.Yaw, 0.f), Dt, 4.f));
+		Animate(Dt, false);
+		return;
+	}
 
 	// ----- orders -----
 	switch (Order)
@@ -1546,11 +1816,17 @@ void ATSCUnit::Sim(float Dt)
 		if (WorkTimer > 0.f)
 		{
 			WorkTimer -= Dt;
+			if (WorkPhase == 0 && !WorkFace.IsZero())
+			{
+				const FRotator Face = (WorkFace - Loc2D()).Rotation();
+				SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Face.Yaw, 0.f), Dt, 8.f));
+			}
 			if (WorkPhase == 0 && SwingTimer <= 0.f && OneShotTimer <= 0.f)
 			{
 				// Chopping (axe) or gathering (picking up).
 				const bool bChop = Role == ETSCRole::Woodcutter || (Role == ETSCRole::Worker && Job == ETSCJob::Wood);
 				StartSwing(0.6f, 0.f, bChop ? ETSCAnim::Slash : ETSCAnim::PickUp);
+				if (bChop) { GM->PlayAxeImpact(GetActorLocation(), true); }
 			}
 			if (WorkTimer <= 0.f) { WorkPhase = 1 - WorkPhase; }
 		}
@@ -1704,7 +1980,7 @@ void ATSCUnit::Animate(float Dt, bool bMoving)
 // A work cycle has two completed stages on the same reserved actor. Walking/carrying never completes a stage.
 bool ATSCUnit::IsTimberWorker() const
 {
-	return IsValid(GM) && GM->Phase == ETSCPhase::Day && IsAlive() && !bDowned && !bSheltered
+	return IsValid(GM) && GM->Phase == ETSCPhase::Day && IsAlive() && !bDowned && !bSheltered && !bScriptWork
 		&& Order == ETSCOrder::Work && !WorkA.Equals(WorkB)
 		&& (Role == ETSCRole::Woodcutter || (Role == ETSCRole::Worker && Job == ETSCJob::Wood));
 }
@@ -1773,7 +2049,11 @@ bool ATSCUnit::SimTimberWork(float Dt)
 	const FRotator Face = (Tree->GetActorLocation() - Loc2D()).Rotation();
 	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Face.Yaw, 0.f), Dt, 12.f));
 	if (WorkTimer <= 0.f) { WorkTimer = TimberStageDuration; }
-	if (SwingTimer <= 0.f && OneShotTimer <= 0.f) { StartSwing(0.6f, 0.f, ETSCAnim::Slash); }
+	if (SwingTimer <= 0.f && OneShotTimer <= 0.f)
+	{
+		StartSwing(0.6f, 0.f, ETSCAnim::Slash);
+		GM->PlayAxeImpact(Tree->GetActorLocation(), true);
+	}
 	WorkTimer -= Dt;
 	if (WorkTimer <= 0.f)
 	{

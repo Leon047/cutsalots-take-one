@@ -9,6 +9,7 @@
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
+#include "InputTriggers.h"
 #include "TSCColonyCameraPawn.h"
 #include "TSCGameMode.h"
 #include "TSCHUD.h"
@@ -85,8 +86,18 @@ void ATSCPlayerController::SetupInputComponent()
 	}
 
 	ColonyContext->MapKey(ZoomAction, EKeys::MouseWheelAxis);
-	ColonyContext->MapKey(RotateAction, EKeys::E);
-	ColonyContext->MapKey(RotateAction, EKeys::Q).Modifiers.Add(Negate());
+	ColonyContext->MapKey(ZoomAction, EKeys::PageDown).Triggers.Add(NewObject<UInputTriggerPressed>(this));
+	{
+		FEnhancedActionKeyMapping& ZoomOut = ColonyContext->MapKey(ZoomAction, EKeys::PageUp);
+		ZoomOut.Modifiers.Add(Negate());
+		ZoomOut.Triggers.Add(NewObject<UInputTriggerPressed>(this));
+	}
+	ColonyContext->MapKey(RotateAction, EKeys::E).Triggers.Add(NewObject<UInputTriggerPressed>(this));
+	{
+		FEnhancedActionKeyMapping& RotateLeft = ColonyContext->MapKey(RotateAction, EKeys::Q);
+		RotateLeft.Modifiers.Add(Negate());
+		RotateLeft.Triggers.Add(NewObject<UInputTriggerPressed>(this));
+	}
 	ColonyContext->MapKey(DragAction, EKeys::MiddleMouseButton);
 	ColonyContext->MapKey(LookAction, EKeys::Mouse2D);
 

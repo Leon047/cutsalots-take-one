@@ -10,7 +10,7 @@ class UCameraComponent;
 class USpringArmComponent;
 
 /**
- * RTS-style colony camera: pan (WASD / edge / middle-mouse drag), zoom (mouse wheel), rotate (Q/E).
+ * RTS-style colony camera: pan (WASD / edge / middle-mouse drag), zoom (mouse wheel / Page Down / Page Up), rotate (Q/E).
  * Input is fed in by ATSCPlayerController; this pawn only accumulates it and applies it in Tick.
  */
 UCLASS()
@@ -25,10 +25,10 @@ public:
 
 	/** X = right, Y = forward, each -1..1. Called every frame while the keys are held. */
 	void AddPanInput(const FVector2D& Input) { PendingPan += Input; }
-	/** Mouse wheel delta; positive zooms in. */
+	/** Zoom steps from the wheel or keyboard; positive zooms in. */
 	void AddZoomInput(float Axis) { PendingZoom += Axis; }
-	/** -1..1, positive rotates clockwise seen from above. */
-	void AddRotateInput(float Axis) { PendingRotate += Axis; }
+	/** Signed quarter-turns. Positive rotates clockwise seen from above. */
+	void AddRotateInput(float Steps) { PendingRotate += Steps; }
 	/** Raw mouse delta while middle-mouse dragging ("grab the ground"). */
 	void AddDragInput(const FVector2D& MouseDelta) { PendingDrag += MouseDelta; }
 	/** Scripted camera (title prologue): place the focus point and set the zoom at once. */
@@ -64,21 +64,21 @@ protected:
 	float ReferenceArmLength = 16500.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
-	float MinArmLength = 6000.f;
+	float MinArmLength = 1000.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
 	float MaxArmLength = 20000.f;
 
-	/** Arm length change per wheel notch. */
+	/** Arm length change per wheel notch or zoom key press. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
 	float ZoomStep = 1200.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
 	float ZoomInterpSpeed = 8.f;
 
-	/** Degrees per second at full Q/E input. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Rotate")
-	float RotateSpeed = 90.f;
+	/** Duration of the eased camera turn in seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Rotate", meta = (ClampMin = "0.01"))
+	float RotationDuration = 0.3f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
 	float CameraPitch = -36.f;
@@ -88,5 +88,8 @@ private:
 	FVector2D PendingDrag = FVector2D::ZeroVector;
 	float PendingZoom = 0.f;
 	float PendingRotate = 0.f;
+	double RotationStartYaw = 0.0;
+	double RotationDeltaYaw = 0.0;
+	float RotationProgress = 1.f;
 	float DesiredArmLength = 0.f;
 };

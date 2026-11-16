@@ -21,7 +21,7 @@ class UPostProcessComponent;
 class USkyLightComponent;
 
 enum class ETSCPhase : uint8 { Title, Day, Night, Epilogue };
-enum class ETSCDogSound : uint8 { PlayBark, Pant, Growl, AttackBark };
+enum class ETSCDogSound : uint8 { PlayBark, Pant, Growl, AttackBark, AlertBark };
 enum class ETSCDayOnePrompt : uint8 { None, Wood, Food, Build, Cut };
 
 /** Editable regions of the map; every object in a region has a Living and an Ashen version. */
@@ -117,7 +117,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Saga")
 	float DayLength = 135.f;
 	UPROPERTY(EditAnywhere, Category = "Saga")
-	float NightLength = 85.f;
+	float NightLength = 105.f;
 	/** Seconds between economy ticks. */
 	UPROPERTY(EditAnywhere, Category = "Saga")
 	float EconomyInterval = 5.f;
@@ -238,6 +238,7 @@ public:
 	void AddTracer(const FVector& From, const FVector& To, const FLinearColor& Col);
 	void OnUnitDied(ATSCUnit* U);
 	void PlayDogSound(const ATSCUnit& Dog, ETSCDogSound Cue);
+	void PlayAxeImpact(const FVector& Location, bool bWood);
 	void Toast(const FString& Text);
 	/** Visual only: how deep a unit standing at P is in the shallows (0 on land and on standing dock planks). */
 	float GroundReliefAt(const FVector& P) const;
@@ -306,6 +307,12 @@ private:
 	void SetGate(bool bClosed);
 	/** Bars or frees the two gate cells for the enemy nav layer only. */
 	void SetGateCells(bool bBar);
+	/** Blocks the cells under the fallen gate spruce, or frees exactly those again. */
+	void SetSpruceFallen(bool bFallen);
+	/** Where the woodcutters stand to saw up the fallen spruce (I-th spot) and the trunk point they face. */
+	void SpruceCutSpot(int32 I, FVector& OutStand, FVector& OutFace) const;
+	void SimSpruceClearing(float Dt);
+	void FinishSpruceClearing();
 	void ShowBanner(const FString& Text, float Time);
 	void AutoPlay(float Dt);
 	/** Cross-fades to Sound; does nothing if it is already the current track. */
@@ -319,6 +326,10 @@ private:
 	UPROPERTY() TObjectPtr<USoundBase> DogGrowl;
 	UPROPERTY() TObjectPtr<USoundBase> DogAttackBark;
 	UPROPERTY() TObjectPtr<USoundAttenuation> DogAttenuation;
+	UPROPERTY() TObjectPtr<USoundBase> BoarFleeSound;
+	UPROPERTY() TObjectPtr<USoundBase> AxeWoodImpact;
+	UPROPERTY() TObjectPtr<USoundBase> AxeEnemyImpact;
+	UPROPERTY() TObjectPtr<USoundAttenuation> AxeAttenuation;
 	FTimerHandle MusicTimer;
 
 	// scenes
@@ -389,6 +400,7 @@ private:
 	TArray<USceneComponent*> GateLeaves;
 	float GateOpenAlpha = 1.f;
 	UPROPERTY() TObjectPtr<ATSCPrimActor> EventTree;
+	TArray<FIntPoint> SpruceCells;
 	UPROPERTY() TObjectPtr<ATSCPrimActor> Garden;
 	TArray<int32> CropParts;
 	UPROPERTY() TObjectPtr<ATSCPrimActor> DockActor;
@@ -400,7 +412,11 @@ private:
 	bool bProLandingPlayed = false;
 	FVector AltarPos = FVector::ZeroVector; // the stone altar (SM_Altar) in the level: where the villagers pray
 	bool bAltarFound = false;
-	UPROPERTY() TObjectPtr<ATSCPrimActor> AltarGlow; // carries the altar's blessing lights
+	UPROPERTY() TObjectPtr<ATSCPrimActor> AltarGlow; // carries the altar's blessing lights when the level has no braziers
+	/** The two braziers by the altar (BP_Brazier_01): [0] burns for the Hammer's blessing, [1] for the Stag's. Cold until asked. */
+	UPROPERTY() TObjectPtr<AActor> AltarBraziers[2];
+	float BrazierSettleTime = 0.6f; // the Blueprints light themselves on BeginPlay: put them out again once they have
+	void SetBrazierLit(int32 Which, bool bLit);
 
 	// named villagers and event actors
 	UPROPERTY() TObjectPtr<ATSCUnit> Hunter;
@@ -428,13 +444,17 @@ private:
 	// economy modifiers set by the scenes
 	float ForestMul = 1.f;
 	float GardenMul = 1.f;
-	float GroveBonus = 2.f;
-	float DockBonus = 2.f;
+	float GroveBonus = 3.f;
+	float DockBonus = 3.f;
 	float DayFoodMul = 1.f;
 	int32 ExtraSawmills = 0;
 	int32 ExtraHealers = 0;
 	int32 HousesBuilt = 0;
-	bool bPendingTimber = false;
+	/** After the gate fight: the woodcutters saw up the fallen spruce and haul it off before the west gate opens. */
+	bool bClearingSpruce = false;
+	float SpruceClear = 0.f;           // 0..1
+	FVector SpruceFullScale = FVector::OneVector;
+	UPROPERTY() TArray<TObjectPtr<ATSCPrimActor>> SprucePieces;
 	bool bShieldWounded = false;
 	bool bHungryNight = false;
 	bool bFedNight = false;
@@ -444,6 +464,8 @@ private:
 	bool bWestBreached = false;
 	bool bEastBreached = false;
 	int32 EnemiesSlain = 0;
+	int32 CreatureWaves[3] = { 3, 3, 4 };
+	int32 RaiderWaves[2] = { 3, 3 };
 	TArray<FString> BuiltNames;
 
 	float EconomyTimer = 0.f;
