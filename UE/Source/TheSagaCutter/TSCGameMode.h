@@ -412,7 +412,11 @@ private:
 	bool bProLandingPlayed = false;
 	FVector AltarPos = FVector::ZeroVector; // the stone altar (SM_Altar) in the level: where the villagers pray
 	bool bAltarFound = false;
-	UPROPERTY() TObjectPtr<ATSCPrimActor> AltarGlow; // carries the altar's blessing lights
+	UPROPERTY() TObjectPtr<ATSCPrimActor> AltarGlow; // carries the altar's blessing lights when the level has no braziers
+	/** The two braziers by the altar (BP_Brazier_01): [0] burns for the Hammer's blessing, [1] for the Stag's. Cold until asked. */
+	UPROPERTY() TObjectPtr<AActor> AltarBraziers[2];
+	float BrazierSettleTime = 0.6f; // the Blueprints light themselves on BeginPlay: put them out again once they have
+	void SetBrazierLit(int32 Which, bool bLit);
 
 	// named villagers and event actors
 	UPROPERTY() TObjectPtr<ATSCUnit> Hunter;

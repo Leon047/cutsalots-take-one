@@ -37,6 +37,8 @@ struct FTSCArrowFlight
 	/** 0..1 progress; >= 1 means finished and the component can be reused. */
 	float T = 1.f;
 	float Dur = 0.3f;
+	/** True while the arrow is nocked on the bow being drawn (it follows the bow and has not been loosed yet). */
+	bool bNocked = false;
 };
 
 /**
@@ -142,6 +144,14 @@ private:
 	void AddTintedMaterials(UMeshComponent* Comp);
 	/** Hunter: launch a visible arrow towards To. False if there is no arrow mesh (caller draws the tracer line). */
 	bool FireArrow(const FVector& To);
+	/** Hunter: nock an arrow and draw the bow; the arrow is loosed (and the hit lands) when the draw ends. */
+	void BeginDraw(ATSCUnit* At);
+	/** Abort the draw without shooting (target lost, unit downed). */
+	void CancelDraw();
+	/** Index of a free arrow in the pool (made if none is), or INDEX_NONE without the arrow mesh. */
+	int32 AcquireArrow();
+	/** Turn arrow Idx into a flight from its current place to To. */
+	void LoosenArrow(int32 Idx, const FVector& To);
 	void UpdateArrows(float Dt);
 	/** Plays an animation on the Viking mesh. Loops keep running if already playing. Returns the clip length (0 if missing). */
 	float PlayAnim(ETSCAnim Id, bool bLoop, float Rate = 1.f);
@@ -150,6 +160,8 @@ private:
 	void StartSwing(float ArmTime, float Window, ETSCAnim Clip);
 	bool StepToward(const FVector& Dest, float Dt, float StopDist);
 	ATSCUnit* FindTarget() const;
+	/** True when nothing solid (palisade, closed gate, fence, building) stands on the line between this archer and T. */
+	bool HasShot(const ATSCUnit* T) const;
 	void Animate(float Dt, bool bMoving);
 	/** Sinks the unit into the shallows (visual only) and throws splashes while it walks there. */
 	void UpdateWading(float Dt);
@@ -292,4 +304,15 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> ArrowComps;
 	TArray<FTSCArrowFlight> Arrows;
+	/** Bow draw in progress: seconds left, the full duration, the target and the nocked arrow's pool index. */
+	float DrawTimer = 0.f;
+	float DrawTotal = 0.f;
+	TWeakObjectPtr<ATSCUnit> DrawTarget;
+	FVector DrawAim = FVector::ZeroVector;
+	int32 NockedIdx = INDEX_NONE;
+	/** Bow pose: blend weight (0 = the clip, 1 = both arms in the draw pose) and how far the string hand is drawn (0..1). */
+	float BowPoseW = 0.f;
+	float DrawPull = 0.f;
+	/** Called after the animation is evaluated: poses both arms for the draw (two-bone IK on top of the clip). */
+	void ApplyBowPose();
 };

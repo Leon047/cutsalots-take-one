@@ -8,6 +8,7 @@
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/PostProcessComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "DrawDebugHelpers.h"
@@ -431,18 +432,26 @@ ATSCUnit* ATSCGameMode::SpawnWildlife(ETSCRole InRole, const FVector& Loc, float
 
 void ATSCGameMode::SpawnAllWildlife()
 {
-	// The stag lives in the forest, outside the palisade (the grove is inside the wall).
-	SpawnWildlife(ETSCRole::Stag, CellF(2.0f, 21.5f), 320.f, TSCRegion::Forest);
-	// Deer graze in clearings of the western forest (north and south of the road).
-	SpawnWildlife(ETSCRole::Deer, CellF(3.f, 6.f), 350.f, TSCRegion::Forest);
-	SpawnWildlife(ETSCRole::Deer, CellF(3.6f, 6.8f), 350.f, TSCRegion::Forest);
+	// The forest wraps the settlement from the west (cells x < 8) and runs as a strip along the north and south walls.
+	// Every kind keeps to its own corner, so the map reads as a habitat and not as a zoo.
+	// The stag keeps to the deep, quiet south-west, far from the road and the wolves.
+	SpawnWildlife(ETSCRole::Stag, CellF(-4.5f, 20.f), 320.f, TSCRegion::Forest);
+	// Deer graze in clearings, in small herds: north-west clearing, south-west clearing, one pair near the middle of the west edge.
+	SpawnWildlife(ETSCRole::Deer, CellF(2.4f, 5.4f), 350.f, TSCRegion::Forest);
+	SpawnWildlife(ETSCRole::Deer, CellF(3.2f, 6.4f), 350.f, TSCRegion::Forest);
+	SpawnWildlife(ETSCRole::Deer, CellF(1.6f, 6.6f), 350.f, TSCRegion::Forest);
 	SpawnWildlife(ETSCRole::Deer, CellF(2.6f, 17.5f), 350.f, TSCRegion::Forest);
-	// A wolf pack prowls the deep forest, far from the wall.
-	SpawnWildlife(ETSCRole::Wolf, CellF(-2.f, 4.5f), 420.f, TSCRegion::Forest);
-	SpawnWildlife(ETSCRole::Wolf, CellF(-2.6f, 5.2f), 420.f, TSCRegion::Forest);
-	SpawnWildlife(ETSCRole::Wolf, CellF(-1.4f, 5.6f), 420.f, TSCRegion::Forest);
-	// Foxes sneak along the forest edges: north of the clearing and behind the grove.
+	SpawnWildlife(ETSCRole::Deer, CellF(3.4f, 18.4f), 350.f, TSCRegion::Forest);
+	SpawnWildlife(ETSCRole::Deer, CellF(-3.f, 11.f), 300.f, TSCRegion::Forest);
+	SpawnWildlife(ETSCRole::Deer, CellF(-3.8f, 13.6f), 300.f, TSCRegion::Forest);
+	// A wolf pack prowls the deep north-west forest, far from the wall and from the herds.
+	SpawnWildlife(ETSCRole::Wolf, CellF(-8.f, 3.5f), 420.f, TSCRegion::Forest);
+	SpawnWildlife(ETSCRole::Wolf, CellF(-8.6f, 4.2f), 420.f, TSCRegion::Forest);
+	SpawnWildlife(ETSCRole::Wolf, CellF(-7.4f, 4.6f), 420.f, TSCRegion::Forest);
+	// Foxes sneak along the forest edges: the north strip, the north-west clearing, the south strip and behind the grove.
 	SpawnWildlife(ETSCRole::Fox, CellF(6.4f, 2.2f), 300.f, TSCRegion::Forest);
+	SpawnWildlife(ETSCRole::Fox, CellF(-1.f, 0.f), 300.f, TSCRegion::Forest);
+	SpawnWildlife(ETSCRole::Fox, CellF(2.f, 24.5f), 300.f, TSCRegion::Forest);
 	SpawnWildlife(ETSCRole::Fox, CellF(10.8f, 25.6f), 300.f, TSCRegion::Grove);
 	// Village livestock grazes inside the cattle pen (cells 21..25 x 21..24, built in the level setup): the wander radius keeps them off the fence.
 	SpawnWildlife(ETSCRole::Cow, CellF(22.4f, 22.2f), 130.f, TSCRegion::None);
@@ -907,7 +916,7 @@ void ATSCGameMode::ResetVillagers()
 		}
 	}
 	OrderPatrolRoute(Hunter);
-	Woodcutter->OrderWork(CellF(7.5f, 9.5f), CellF(11.5f, 6.5f));
+	OrderPatrolRoute(Woodcutter);
 	OrderPatrolRoute(Healer);
 	OrderPatrolRoute(Shield);
 	UpdateJobs();
@@ -925,6 +934,8 @@ void ATSCGameMode::OrderPatrolRoute(ATSCUnit* U)
 		{ 25.8f, 19.0f }, { 22.0f, 21.8f }, { 15.0f, 21.8f }, { 10.6f, 20.4f }, { 9.3f, 15.5f }, { 10.8f, 12.0f } };
 	static const FVector2D TorvaldCells[] = { { 12.9f, 9.0f }, { 20.9f, 9.0f }, { 20.9f, 13.9f }, { 12.9f, 13.9f } };
 	static const FVector2D SigrunCells[] = { { 14.8f, 15.6f }, { 20.8f, 15.6f }, { 21.0f, 19.6f }, { 14.8f, 19.6f } };
+	//  Ulf    - the small loop north of the longhouse, between Hakon's north leg and the houses
+	static const FVector2D UlfCells[] = { { 16.2f, 5.0f }, { 19.8f, 5.0f }, { 19.8f, 7.2f }, { 16.2f, 7.2f } };
 
 	const FVector2D* Cells = nullptr;
 	int32 Num = 0;
@@ -933,6 +944,7 @@ void ATSCGameMode::OrderPatrolRoute(ATSCUnit* U)
 	case ETSCRole::Hunter: Cells = HakonCells; Num = UE_ARRAY_COUNT(HakonCells); break;
 	case ETSCRole::Shield: Cells = TorvaldCells; Num = UE_ARRAY_COUNT(TorvaldCells); break;
 	case ETSCRole::Healer: Cells = SigrunCells; Num = UE_ARRAY_COUNT(SigrunCells); break;
+	case ETSCRole::Woodcutter: Cells = UlfCells; Num = UE_ARRAY_COUNT(UlfCells); break;
 	default: return;
 	}
 	TArray<FVector> Route;
@@ -1015,7 +1027,49 @@ void ATSCGameMode::CollectLevelProps()
 		AltarPos = CellCenter(16, 2);
 		UE_LOG(LogSaga, Warning, TEXT("[Saga] No stone altar (SM_Altar) found in the level, praying at a default spot"));
 	}
+	// The two braziers standing by the altar: one per blessing, west one (smaller Y, then X) for the Hammer, the other for the Stag.
+	{
+		TArray<AActor*> Near;
+		for (AActor* A : NavPropActors)
+		{
+			if (A && A->GetClass()->GetPathName().Contains(TEXT("Brazier")) && FVector::Dist2D(A->GetActorLocation(), AltarPos) < 1200.f) { Near.Add(A); }
+		}
+		Near.Sort([this](const AActor& A, const AActor& B)
+		{
+			return FVector::DistSquared2D(A.GetActorLocation(), AltarPos) < FVector::DistSquared2D(B.GetActorLocation(), AltarPos);
+		});
+		if (Near.Num() > 2) { Near.SetNum(2); }
+		Near.Sort([](const AActor& A, const AActor& B)
+		{
+			return A.GetActorLocation().Y != B.GetActorLocation().Y ? A.GetActorLocation().Y < B.GetActorLocation().Y : A.GetActorLocation().X < B.GetActorLocation().X;
+		});
+		for (int32 I = 0; I < Near.Num(); ++I) { AltarBraziers[I] = Near[I]; }
+		UE_LOG(LogSaga, Display, TEXT("[Saga] %d altar braziers found"), Near.Num());
+		SetBrazierLit(0, false);
+		SetBrazierLit(1, false);
+	}
 	UE_LOG(LogSaga, Display, TEXT("[Saga] Prologue: %d level props inside the wall, %d road fence pieces"), ProLevelProps.Num(), ProRoadFence.Num());
+}
+
+void ATSCGameMode::SetBrazierLit(int32 Which, bool bLit)
+{
+	AActor* B = AltarBraziers[Which];
+	if (!B) { return; }
+	TArray<UParticleSystemComponent*> Fires;
+	B->GetComponents<UParticleSystemComponent>(Fires);
+	for (UParticleSystemComponent* F : Fires)
+	{
+		F->SetVisibility(bLit, true);
+		if (bLit) { F->Activate(true); } else { F->Deactivate(); F->KillParticlesForced(); }
+	}
+	TArray<ULightComponent*> Lights;
+	B->GetComponents<ULightComponent>(Lights);
+	for (ULightComponent* L : Lights)
+	{
+		L->SetVisibility(bLit);
+		// the Stag's fire gives a green light, the Hammer's keeps its red-gold
+		if (bLit && Which == 1) { L->SetLightColor(Pal::Shroom); }
+	}
 }
 
 void ATSCGameMode::BakeNavProps()
@@ -1441,6 +1495,15 @@ void ATSCGameMode::Tick(float DeltaSeconds)
 	const float RealDt = FMath::Min(DeltaSeconds, 0.1f);
 	WorldTime += RealDt;
 	UpdatePineWind(GetWorld(), RealDt);
+	if (BrazierSettleTime > 0.f)
+	{
+		BrazierSettleTime -= RealDt;
+		if (BrazierSettleTime <= 0.f)
+		{
+			SetBrazierLit(0, bHammerBlessing);
+			SetBrazierLit(1, bStagBlessing);
+		}
+	}
 
 	if (!bCameraSet)
 	{
@@ -2090,12 +2153,16 @@ void ATSCGameMode::StartBuild(EBuilding Type)
 		const bool bHammer = Type == EBuilding::HammerBlessing;
 		Wood -= BuildCost(Type);
 		(bHammer ? bHammerBlessing : bStagBlessing) = true;
-		if (!AltarGlow)
+		if (AltarBraziers[bHammer ? 0 : 1])
 		{
-			AltarGlow = SpawnPrim(AltarPos);
+			SetBrazierLit(bHammer ? 0 : 1, true); // the brazier by the altar catches fire
 		}
-		AltarGlow->AddLight(FVector(0.f, 0.f, 160.f), bHammer ? Pal::Fire : Pal::Shroom, 4.f, 2.f, 600.f);
-		AltarGlow->Refresh();
+		else
+		{
+			if (!AltarGlow) { AltarGlow = SpawnPrim(AltarPos); }
+			AltarGlow->AddLight(FVector(0.f, 0.f, 160.f), bHammer ? Pal::Fire : Pal::Shroom, 4.f, 2.f, 600.f);
+			AltarGlow->Refresh();
+		}
 		BuiltNames.Add(bHammer ? TEXT("the Hammer's blessing") : TEXT("the Stag's blessing"));
 		Toast(bHammer ? TEXT("The altar glows red-gold: your defenders will strike harder.")
 			: TEXT("The altar glows green: the forest gives more food and sends fewer horrors."));
@@ -2493,7 +2560,7 @@ void ATSCGameMode::ApplyAshen(int32 Idx)
 			Hunter->HP = Hunter->MaxHP;
 			OrderPatrolRoute(Hunter);
 		}
-		if (Woodcutter->IsAlive()) { Woodcutter->OrderWork(CellF(13.f, 6.5f), CellF(11.5f, 6.5f)); }
+		OrderPatrolRoute(Woodcutter);
 		Toast(TEXT("EDIT: the forest burned years ago. The gate stands clear and Hakon walks home, but that timber is ash."));
 	}
 	else if (Idx == 2)
