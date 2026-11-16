@@ -22,6 +22,8 @@ struct FTSCPart
 {
 	UStaticMeshComponent* Comp = nullptr;
 	UMaterialInstanceDynamic* MID = nullptr;
+	/** Set by KeepOwnMaterial: the mesh keeps its own (textured) materials while Living and swaps to this flat one when Ashen. */
+	UMaterialInstanceDynamic* AshMID = nullptr;
 	FLinearColor LCol = FLinearColor::White;
 	FLinearColor ACol = FLinearColor::Gray;
 	FLinearColor LEm = FLinearColor::Black;
@@ -63,6 +65,8 @@ public:
 	int32 AddMeshPart(UStaticMesh* Mesh, const FVector& Loc, const FRotator& Rot, const FVector& Scale, USceneComponent* Parent = nullptr);
 	/** Uses Saga Color and Emissive parameters on the given material, or the default flat material. */
 	void SetPartMaterial(int32 Idx, UMaterialInterface* Material = nullptr);
+	/** The mesh part keeps its own textured materials in the Living saga and turns into the flat AshenCol when Ashen. */
+	void KeepOwnMaterial(int32 Idx, const FLinearColor& AshenCol);
 	USceneComponent* AddPivot(const FVector& Loc, USceneComponent* Parent = nullptr);
 	void AddLight(const FVector& Loc, const FLinearColor& Col, float LivingIntensity, float AshenIntensity, float Radius);
 

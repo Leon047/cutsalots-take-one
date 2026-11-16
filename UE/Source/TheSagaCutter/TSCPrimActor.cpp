@@ -127,6 +127,15 @@ void ATSCPrimActor::SetPartMaterial(int32 Idx, UMaterialInterface* Material)
 	}
 }
 
+void ATSCPrimActor::KeepOwnMaterial(int32 Idx, const FLinearColor& AshenCol)
+{
+	FTSCPart& Part = Parts[Idx];
+	Part.MID = nullptr;  // the own materials have no Saga parameters: nothing to tint while Living
+	Part.AshMID = UMaterialInstanceDynamic::Create(FlatMaterial(), Part.Comp);
+	Part.LCol = FLinearColor::White;
+	Part.ACol = AshenCol;
+}
+
 USceneComponent* ATSCPrimActor::AddPivot(const FVector& Loc, USceneComponent* Parent)
 {
 	USceneComponent* Pivot = NewObject<USceneComponent>(this);
@@ -227,6 +236,19 @@ void ATSCPrimActor::Refresh()
 			{
 				P.MID->SetVectorParameterValue(TEXT("Color"), FMath::Lerp(P.LCol, P.ACol, A));
 				P.MID->SetVectorParameterValue(TEXT("Emissive"), FMath::Lerp(P.LEm, P.AEm, A));
+			}
+			else if (P.AshMID)
+			{
+				// Own textured materials while Living, the flat ashen colour once the Ashen saga has taken over.
+				const bool bAsh = A > 0.5f;
+				UStaticMesh* Mesh = P.Comp->GetStaticMesh();
+				for (int32 Slot = 0; Slot < P.Comp->GetNumMaterials(); ++Slot)
+				{
+					UMaterialInterface* Want = bAsh ? static_cast<UMaterialInterface*>(P.AshMID) : (Mesh ? Mesh->GetMaterial(Slot) : nullptr);
+					if (P.Comp->GetMaterial(Slot) != Want) { P.Comp->SetMaterial(Slot, Want); }
+				}
+				P.AshMID->SetVectorParameterValue(TEXT("Color"), P.ACol);
+				P.AshMID->SetVectorParameterValue(TEXT("Emissive"), P.AEm);
 			}
 		}
 	}

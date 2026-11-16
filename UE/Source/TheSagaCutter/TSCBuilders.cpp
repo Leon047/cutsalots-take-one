@@ -28,7 +28,10 @@
 #include "HAL/FileManager.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/FileHelper.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "UObject/Package.h"
+#include "UObject/SavePackage.h"
 #include "TSCPrimActor.h"
 #include "TheSagaCutter.h"
 
@@ -562,13 +565,19 @@ namespace TSC
 			return Mesh;
 		}
 
+		/** bOwnMaterial: keep the mesh's own textured materials while Living (Color is then only the base of the Ashen tint). */
 		int32 AddNaturalProp(ATSCPrimActor* A, UStaticMesh* Mesh, const FVector& Base,
-			const FRotator& Rotation, const FVector& Size, const FLinearColor& Color)
+			const FRotator& Rotation, const FVector& Size, const FLinearColor& Color, bool bOwnMaterial = false)
 		{
 			const FBoxSphereBounds Bounds = Mesh->GetBounds();
 			const FVector Scale = Size / (Bounds.BoxExtent * 2.0).ComponentMax(FVector(1.0));
 			const FVector Foot(Bounds.Origin.X, Bounds.Origin.Y, Bounds.Origin.Z - Bounds.BoxExtent.Z);
 			const int32 Part = A->AddMeshPart(Mesh, Base - Rotation.RotateVector(Foot * Scale), Rotation, Scale);
+			if (bOwnMaterial)
+			{
+				A->KeepOwnMaterial(Part, ATSCPrimActor::Ashify(Color));
+				return Part;
+			}
 			A->Parts[Part].LCol = Color;
 			A->SetAshen(Part, ATSCPrimActor::Ashify(Color));
 			A->SetPartMaterial(Part, nullptr);
@@ -650,9 +659,10 @@ namespace TSC
 					const bool bCabbage = (X + Y) % 2 == 0;
 					UStaticMesh* Mesh = bCabbage ? LeafyCrop : Sprout;
 					if (!Mesh) { continue; }
+					// The crops keep their own textured materials (leaves, roots); the flat tint is only for the Ashen saga.
 					const int32 C = AddNaturalProp(A, Mesh, P + FVector(0.f, 0.f, BedLift - 14.f), FRotator(0.f, (X * 43 + Y * 31 + I * 97) % 360, 0.f),
 						bCabbage ? FVector(44.f, 42.f, 36.f) : FVector(38.f, 36.f, 49.f),
-						bCabbage ? FLinearColor(0.18f, 0.42f, 0.1f) : FLinearColor(0.3f, 0.45f, 0.05f));
+						bCabbage ? FLinearColor(0.18f, 0.42f, 0.1f) : FLinearColor(0.3f, 0.45f, 0.05f), true);
 					A->SetAshen(C, FLinearColor(0.16f, 0.15f, 0.08f));
 					if ((X * 3 + Y * 5 + I) % 3 == 0) { A->SetVis(C, ETSCVis::LivingOnly); }
 					Crops.Add(C);
@@ -1003,13 +1013,198 @@ namespace TSC
 		}
 	}
 
-	USceneComponent* BuildLongship(ATSCPrimActor* A, float ShipLength, float ShipYaw)
+	namespace
 	{
-		// The imported drakkar (Content/Drakar), for the villagers' longship and the raiders' boat alike. Its own materials are kept.
+		void SetUniform(FRawDistributionFloat& D, UObject* Outer, float Min, float Max)
+		{
+			UDistributionFloatUniform* U = NewObject<UDistributionFloatUniform>(Outer);
+			U->Min = Min;
+			U->Max = Max;
+			U->bIsDirty = true;
+			D.Distribution = U;
+			D.Initialize();
+		}
+
+		void SetUniform(FRawDistributionVector& D, UObject* Outer, const FVector& Min, const FVector& Max)
+		{
+			UDistributionVectorUniform* U = NewObject<UDistributionVectorUniform>(Outer);
+			U->Min = Min;
+			U->Max = Max;
+			U->bIsDirty = true;
+			D.Distribution = U;
+			D.Initialize();
+		}
+
+		void SetConstant(FRawDistributionFloat& D, UObject* Outer, float V)
+		{
+			UDistributionFloatConstant* C = NewObject<UDistributionFloatConstant>(Outer);
+			C->Constant = V;
+			C->bIsDirty = true;
+			D.Distribution = C;
+			D.Initialize();
+		}
+
+		void SetConstant(FRawDistributionVector& D, UObject* Outer, const FVector& V)
+		{
+			UDistributionVectorConstant* C = NewObject<UDistributionVectorConstant>(Outer);
+			C->Constant = V;
+			C->bIsDirty = true;
+			D.Distribution = C;
+			D.Initialize();
+		}
+
+		/** Float curve over particle life: Points are (time 0..1, value) pairs. */
+		void SetCurve(FRawDistributionFloat& D, UObject* Outer, std::initializer_list<FVector2D> Points)
+		{
+			UDistributionFloatConstantCurve* C = NewObject<UDistributionFloatConstantCurve>(Outer);
+			for (const FVector2D& P : Points)
+			{
+				const int32 I = C->ConstantCurve.AddPoint(P.X, P.Y);
+				C->ConstantCurve.Points[I].InterpMode = CIM_CurveAuto;
+			}
+			C->ConstantCurve.AutoSetTangents();
+			C->bIsDirty = true;
+			D.Distribution = C;
+			D.Initialize();
+		}
+
+		/**
+		 * The forest fog particle system, the asset /Game/VFX/P_ForestFog. When the asset does not exist yet it is made here
+		 * from the chimney smoke (emitters retuned to spawn slow, huge, faint sprites all over a HalfExtent box instead of
+		 * a rising plume) and, in the editor, saved to Content/VFX/P_ForestFog.uasset so it can be tuned in Cascade.
+		 */
+		UParticleSystem* ForestFogSystem(const FVector& HalfExtent)
+		{
+			static UParticleSystem* Cached = nullptr;
+			static bool bTried = false;
+			if (bTried) { return Cached; }
+			bTried = true;
+			const TCHAR* FogPackage = TEXT("/Game/VFX/P_ForestFog");
+			if (UParticleSystem* Existing = LoadObject<UParticleSystem>(nullptr, TEXT("/Game/VFX/P_ForestFog.P_ForestFog"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				Existing->AddToRoot();
+				Cached = Existing;
+				return Cached;
+			}
+			UParticleSystem* Src = LoadObject<UParticleSystem>(nullptr, TEXT("/Game/VFX/P_ChimneySmokePlume.P_ChimneySmokePlume"));
+			if (!Src)
+			{
+				UE_LOG(LogSaga, Warning, TEXT("Forest fog: /Game/VFX/P_ChimneySmokePlume is missing"));
+				return nullptr;
+			}
+#if WITH_EDITOR
+			UPackage* Pkg = CreatePackage(FogPackage);
+			Pkg->FullyLoad();
+#else
+			UPackage* Pkg = GetTransientPackage();
+#endif
+			UParticleSystem* Fog = DuplicateObject<UParticleSystem>(Src, Pkg, TEXT("P_ForestFog"));
+			Fog->SetFlags(RF_Public | RF_Standalone);
+			Fog->AddToRoot();
+			// The box is wide and flat: let the engine measure the bounds from the live particles.
+			Fog->bUseFixedRelativeBoundingBox = false;
+			// Particles per second for the whole box: about one sprite (~9 m across) per 25 m2 alive at any time.
+			const float Area = (HalfExtent.X * 2.f) * (HalfExtent.Y * 2.f) / 10000.f;  // m2
+			const float Lifetime = 18.f;
+			const float Rate = FMath::Clamp(Area / 25.f / Lifetime * 1.6f, 2.f, 60.f);
+			for (UParticleEmitter* Em : Fog->Emitters)
+			{
+				if (!Em) { continue; }
+				for (UParticleLODLevel* Lod : Em->LODLevels)
+				{
+					if (!Lod) { continue; }
+					if (UParticleModuleRequired* Req = Lod->RequiredModule)
+					{
+						Req->EmitterDuration = 0.f;  // loops forever
+						Req->bUseLocalSpace = false;
+						Req->bKillOnDeactivate = false;
+					}
+					for (UParticleModule* Mod : Lod->Modules)
+					{
+						if (!Mod) { continue; }
+						if (UParticleModuleSpawn* Spawn = Cast<UParticleModuleSpawn>(Mod))
+						{
+							SetConstant(Spawn->Rate, Spawn, Rate);
+							SetConstant(Spawn->RateScale, Spawn, 1.f);
+							Spawn->BurstList.Empty();
+						}
+						else if (UParticleModuleLifetime* Life = Cast<UParticleModuleLifetime>(Mod))
+						{
+							SetUniform(Life->Lifetime, Life, Lifetime * 0.75f, Lifetime * 1.25f);
+						}
+						else if (UParticleModuleSize* Size = Cast<UParticleModuleSize>(Mod))
+						{
+							SetUniform(Size->StartSize, Size, FVector(700.f), FVector(1150.f));
+						}
+						else if (UParticleModuleVelocity* Vel = Cast<UParticleModuleVelocity>(Mod))
+						{
+							// Barely moving: a slow random drift along the ground, no rise.
+							SetUniform(Vel->StartVelocity, Vel, FVector(-14.f, -14.f, -1.f), FVector(14.f, 14.f, 3.f));
+							SetConstant(Vel->StartVelocityRadial, Vel, 0.f);
+						}
+						else if (UParticleModuleLocation* Loc = Cast<UParticleModuleLocation>(Mod))
+						{
+							SetUniform(Loc->StartLocation, Loc, FVector(-HalfExtent.X, -HalfExtent.Y, 30.f), FVector(HalfExtent.X, HalfExtent.Y, HalfExtent.Z));
+						}
+						else if (UParticleModuleColorOverLife* Col = Cast<UParticleModuleColorOverLife>(Mod))
+						{
+							// Cool grey-blue mist that fades in and out so sprites never pop.
+							SetConstant(Col->ColorOverLife, Col, FVector(0.62f, 0.68f, 0.76f));
+							SetCurve(Col->AlphaOverLife, Col, { FVector2D(0.f, 0.f), FVector2D(0.25f, 0.09f), FVector2D(0.75f, 0.09f), FVector2D(1.f, 0.f) });
+						}
+						else if (Mod->IsA<UParticleModuleVelocityOverLifetime>() || Mod->IsA<UParticleModuleSizeMultiplyLife>())
+						{
+							Mod->bEnabled = false;  // the plume's rise and swelling
+						}
+					}
+				}
+			}
+			Fog->UpdateAllModuleLists();
+			Fog->BuildEmitters();
+#if WITH_EDITOR
+			{
+				Pkg->MarkPackageDirty();
+				const FString FileName = FPackageName::LongPackageNameToFilename(FogPackage, FPackageName::GetAssetPackageExtension());
+				FSavePackageArgs SaveArgs;
+				SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+				SaveArgs.SaveFlags = SAVE_NoError;
+				const bool bSaved = UPackage::SavePackage(Pkg, Fog, *FileName, SaveArgs);
+				UE_LOG(LogSaga, Log, TEXT("Forest fog: %s %s"), bSaved ? TEXT("created and saved") : TEXT("created but could not save"), FogPackage);
+			}
+#endif
+			Cached = Fog;
+			return Fog;
+		}
+	}
+
+	void BuildForestFog(ATSCPrimActor* A, const FVector& HalfExtent)
+	{
+		UParticleSystem* Template = ForestFogSystem(HalfExtent);
+		if (!Template) { return; }
+		UParticleSystemComponent* Fog = NewObject<UParticleSystemComponent>(A);
+		Fog->bAutoActivate = true;
+		Fog->SetTemplate(Template);
+		Fog->SetupAttachment(A->GetRootComponent());
+		Fog->ComponentTags.Add(TEXT("TSC_ForestFog"));
+		Fog->SetCastShadow(false);
+		Fog->SetCullDistance(0.f);  // never culled: the game camera sits about 165 m away
+		Fog->SecondsBeforeInactive = 0.f;  // keeps simulating off screen so the box is full when the camera arrives
+		Fog->bWarmingUp = true;
+		Fog->WarmupTime = 20.f;  // start with the box already filled
+		Fog->WarmupTickRate = 0.25f;
+		Fog->RegisterComponent();
+		A->AddInstanceComponent(Fog);
+	}
+
+	USceneComponent* BuildLongship(ATSCPrimActor* A, float ShipLength, float ShipYaw, const TCHAR* MaterialPath)
+	{
+		// The imported longship (Content/Drakar/Longship, Tripo), for the villagers' longship and the raiders' boat alike. Its
+		// own textured material is kept. The sail is part of the mesh, so there is no separate sail pivot: nullptr is returned
+		// and ATSCGameMode::SetSailHoisted does nothing.
 		// ShipLength is stem to stern in cm, ShipYaw turns it (the bow points east, +X, at 0); the long axis is found automatically.
 		// (Not cached while null: a failed first load must not stick for the whole session.)
 		static UStaticMesh* Ship = nullptr;
-		if (!Ship) { Ship = LoadNaturalMesh(TEXT("/Game/Drakar/Viking_Ship.Viking_Ship")); }
+		if (!Ship) { Ship = LoadNaturalMesh(TEXT("/Game/Drakar/Longship/SM_VikingLongship.SM_VikingLongship")); }
 		if (Ship)
 		{
 			const FBoxSphereBounds B = Ship->GetBounds();
@@ -1021,41 +1216,16 @@ namespace TSC
 			constexpr float ShipKeelZ = 25.f;
 			const FVector Keel(B.Origin.X, B.Origin.Y, B.Origin.Z - B.BoxExtent.Z);
 			const FVector Loc = -Rot.RotateVector(Keel * Scale) + FVector(0.f, 0.f, ShipKeelZ);
-			A->AddMeshPart(Ship, Loc, Rot, FVector(Scale));
-
-			// The sail is a separate mesh (Content/Drakar/Sail). If it was authored in the hull's frame (its centre lies inside
-			// the hull's bounds) it gets the very same transform; otherwise it is fitted onto the mast by size. It is shown
-			// only while the dock is Living.
-			static UStaticMesh* SailMesh = nullptr;
-			if (!SailMesh) { SailMesh = LoadNaturalMesh(TEXT("/Game/Drakar/Sail.Sail")); }
-			const float Top = Size.Z * Scale + ShipKeelZ; // mast top, used to fit the sail if it was not authored in the hull's frame
-			if (SailMesh)
+			const int32 Hull = A->AddMeshPart(Ship, Loc, Rot, FVector(Scale));
+			if (MaterialPath)
 			{
-				const FBoxSphereBounds SB = SailMesh->GetBounds();
-				const FBox HullBox = FBox::BuildAABB(B.Origin, B.BoxExtent * 1.15);
-				// SailLoc / SailScale: where the sail mesh origin sits on the ship and how big it is.
-				FVector SailLoc = Loc;
-				float SailScale = Scale;
-				if (!HullBox.IsInside(SB.Origin))
-				{
-					SailScale = 0.6f * Top / (float)FMath::Max(SB.BoxExtent.Z * 2.0, 1.0);
-					const FVector Bottom(SB.Origin.X, SB.Origin.Y, SB.Origin.Z - SB.BoxExtent.Z);
-					SailLoc = -Rot.RotateVector(Bottom * SailScale) + FVector(0.f, 0.f, 0.32f * Top);
-				}
-				// The sail hangs on a pivot at its foot: scaling the pivot's Z lowers it onto the deck (see ATSCGameMode).
-				const FVector Foot(SB.Origin.X, SB.Origin.Y, SB.Origin.Z - SB.BoxExtent.Z);
-				const FVector PivotLoc = SailLoc + Rot.RotateVector(Foot * SailScale);
-				USceneComponent* Pivot = A->AddPivot(PivotLoc);
-				const int32 SailPart = A->AddMeshPart(SailMesh, SailLoc - PivotLoc, Rot, FVector(SailScale), Pivot);
-				A->SetVis(SailPart, ETSCVis::LivingOnly);
-				return Pivot;
+				if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, MaterialPath)) { A->SetPartMaterial(Hull, M); }
+				else { UE_LOG(LogTemp, Warning, TEXT("[Saga] longship material %s could not be loaded: the default paint is kept"), MaterialPath); }
 			}
-			// No primitive sail either: the old one must never come back.
-			UE_LOG(LogTemp, Error, TEXT("[Saga] /Game/Drakar/Sail could not be loaded: the longship has no sail"));
 			return nullptr;
 		}
 		// No primitive stand-in: the old drakkar must never come back. A missing asset is an error (see DirectoriesToAlwaysCook).
-		UE_LOG(LogTemp, Error, TEXT("[Saga] /Game/Drakar/Viking_Ship could not be loaded: the longship is missing"));
+		UE_LOG(LogTemp, Error, TEXT("[Saga] /Game/Drakar/Longship/SM_VikingLongship could not be loaded: the longship is missing"));
 		return nullptr;
 	}
 

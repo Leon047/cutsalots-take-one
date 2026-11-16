@@ -63,8 +63,12 @@ namespace TSC
 	void BuildStump(ATSCPrimActor* A);
 	void BuildRock(ATSCPrimActor* A, int32 Seed);
 	void BuildMushrooms(ATSCPrimActor* A, int32 Seed);
+	/** Ground fog filling the box +-HalfExtent around the actor (Z from the ground up to HalfExtent.Z): a slow, wide,
+	 *  faint retune of the chimney smoke particle system. Builds nothing if the smoke system is missing. */
+	void BuildForestFog(ATSCPrimActor* A, const FVector& HalfExtent);
 	/** Returns the pivot at the foot of the sail (scale its Z to lower the sail), or null if the ship has none. */
-	USceneComponent* BuildLongship(ATSCPrimActor* A, float ShipLength = 720.f, float ShipYaw = 0.f);
+	/** MaterialPath (optional) replaces the hull's own material, e.g. the raiders' "Hunter" paint on the same longship mesh. */
+	USceneComponent* BuildLongship(ATSCPrimActor* A, float ShipLength = 720.f, float ShipYaw = 0.f, const TCHAR* MaterialPath = nullptr);
 	void BuildPlotMarker(ATSCPrimActor* A, int32 W, int32 H);
 	void BuildLogPile(ATSCPrimActor* A);
 	void BuildTorch(ATSCPrimActor* A);

@@ -101,10 +101,14 @@ namespace
 		GustTime += Dt;
 		const float Gust = 1.f + 0.35f * FMath::Sin(GustTime * 0.37f) + 0.2f * FMath::Sin(GustTime * 1.13f + 1.7f);
 		const FVector Side(-SmoothDir.Y, SmoothDir.X, 0.f);
-		const FVector Drift = (SmoothDir * (75.f * SmoothSpeed * Gust) + Side * (28.f * SmoothSpeed * FMath::Sin(GustTime * 0.23f))) * Dt;
+		const FVector SmokeDrift = (SmoothDir * (75.f * SmoothSpeed * Gust) + Side * (28.f * SmoothSpeed * FMath::Sin(GustTime * 0.23f))) * Dt;
 		for (TObjectIterator<UParticleSystemComponent> It; It; ++It)
 		{
-			if (It->GetWorld() != World || !It->ComponentHasTag(TEXT("TSC_ChimneySmoke"))) { continue; }
+			if (It->GetWorld() != World) { continue; }
+			// The forest fog creeps with the wind at a fraction of the smoke's speed.
+			const bool bSmoke = It->ComponentHasTag(TEXT("TSC_ChimneySmoke"));
+			if (!bSmoke && !It->ComponentHasTag(TEXT("TSC_ForestFog"))) { continue; }
+			const FVector Drift = bSmoke ? SmokeDrift : SmokeDrift * 0.2f;
 			It->SetWorldRotation(FRotator::ZeroRotator);
 			It->ForceAsyncWorkCompletion(UParticleSystemComponent::STALL);
 			for (FParticleEmitterInstance* Inst : It->EmitterInstances)
@@ -589,6 +593,13 @@ void ATSCGameMode::BuildWorld()
 			}
 		}
 	}
+	// Ground fog over the western forest: one particle box (a slow, faint retune of the chimney smoke) covering the forest
+	// cells, X -6..6 by Y -4..GH+3, from the ground up to about 1.5 m.
+	{
+		const FVector Lo = CellCenter(-6, -4), Hi = CellCenter(6, GH + 3);
+		ATSCPrimActor* FogActor = SpawnPrim((Lo + Hi) * 0.5f, TSCRegion::Forest);
+		BuildForestFog(FogActor, FVector((Hi.X - Lo.X) * 0.5f + CELL * 0.5f, (Hi.Y - Lo.Y) * 0.5f + CELL * 0.5f, 150.f));
+	}
 	// glowing mushrooms in the stag grove (foraged for food)
 	const FVector2D GroveShrooms[7] = { {12.5f, 20.4f}, {13.6f, 21.3f}, {14.2f, 19.6f}, {16.5f, 20.6f}, {17.5f, 21.4f}, {18.6f, 20.2f}, {11.4f, 19.5f} };
 	for (int32 I = 0; I < 7; ++I)
@@ -725,7 +736,9 @@ void ATSCGameMode::BuildWorld()
 		for (int32 Y = 0; Y < GH; ++Y) { if (!(Y == 11 || Y == 12) || X >= 32) { SetBlocked(X, Y, true); } }
 	}
 	RaiderBoat = SpawnPrim(CellF(40.f, 12.f) + FVector(0.f, 0.f, -4.f));
-	BuildLongship(RaiderBoat, 620.f, 180.f); // the same drakkar as ours, bow to the west: it sails in from the east
+	// The same longship as ours in the raiders' "Hunter" paint, turned half way round on request (the mesh's own bow now
+	// points east while the boat sails in from the east).
+	BuildLongship(RaiderBoat, 620.f, 0.f, TEXT("/Game/Drakar/Longship/MI_SM_HunterLongship.MI_SM_HunterLongship"));
 	RaiderBoat->Refresh();
 	RaiderBoat->SetActorHiddenInGame(true);
 
@@ -768,15 +781,7 @@ void ATSCGameMode::BuildWorld()
 		for (int32 J = 0; J < PenH; ++J) { SetBlocked(PenX - 1, PenY + J, true); SetBlocked(PenX + PenW, PenY + J, true); }
 	}
 
-	const FIntPoint Rocks[8] = { {26, 8}, {27, 16}, {26, 19}, {27, 4}, {26, 2}, {27, 21}, {25, 22}, {24, 1} };
-	for (int32 I = 0; I < 8; ++I)
-	{
-		ATSCPrimActor* R = SpawnPrim(CellCenter(Rocks[I].X, Rocks[I].Y) + FVector(0.f, 0.f, 4.f));
-		BuildRock(R, I + 3);
-		R->SetActorScale3D(FVector(1.3f + 0.4f * (I % 3)));
-		R->Refresh();
-		SetBlocked(Rocks[I].X, Rocks[I].Y, true);
-	}
+	// (The row of boulders along the beach, X 24..27, was removed on request: the shore is clear.)
 	// Torch Blueprints are placed in Map_Saga and collected by CollectLevelProps.
 
 	// ----- construction plots -----
