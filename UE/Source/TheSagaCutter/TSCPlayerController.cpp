@@ -92,8 +92,12 @@ void ATSCPlayerController::SetupInputComponent()
 		ZoomOut.Modifiers.Add(Negate());
 		ZoomOut.Triggers.Add(NewObject<UInputTriggerPressed>(this));
 	}
-	ColonyContext->MapKey(RotateAction, EKeys::E);
-	ColonyContext->MapKey(RotateAction, EKeys::Q).Modifiers.Add(Negate());
+	ColonyContext->MapKey(RotateAction, EKeys::E).Triggers.Add(NewObject<UInputTriggerPressed>(this));
+	{
+		FEnhancedActionKeyMapping& RotateLeft = ColonyContext->MapKey(RotateAction, EKeys::Q);
+		RotateLeft.Modifiers.Add(Negate());
+		RotateLeft.Triggers.Add(NewObject<UInputTriggerPressed>(this));
+	}
 	ColonyContext->MapKey(DragAction, EKeys::MiddleMouseButton);
 	ColonyContext->MapKey(LookAction, EKeys::Mouse2D);
 

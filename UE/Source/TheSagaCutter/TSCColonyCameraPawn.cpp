@@ -51,7 +51,26 @@ void ATSCColonyCameraPawn::Tick(float DeltaSeconds)
 		PendingDrag = FVector2D::ZeroVector;
 		PendingZoom = 0.f;
 		PendingRotate = 0.f;
+		RotationProgress = 1.f;
 		return;
+	}
+
+	if (!FMath::IsNearlyZero(PendingRotate))
+	{
+		// Preserve the unfinished part of the turn when another press arrives mid-animation.
+		const float RemainingFraction = 1.f - FMath::SmoothStep(0.f, 1.f, RotationProgress);
+		RotationStartYaw = GetActorRotation().Yaw;
+		RotationDeltaYaw = RotationDeltaYaw * RemainingFraction + PendingRotate * 90.0;
+		RotationProgress = 0.f;
+	}
+
+	if (RotationProgress < 1.f)
+	{
+		RotationProgress = FMath::Min(RotationProgress + DeltaSeconds / FMath::Max(RotationDuration, 0.01f), 1.f);
+		const float EasedProgress = FMath::SmoothStep(0.f, 1.f, RotationProgress);
+		FRotator Rotation = GetActorRotation();
+		Rotation.Yaw = RotationStartYaw + RotationDeltaYaw * EasedProgress;
+		SetActorRotation(Rotation);
 	}
 
 	// Pan speed grows with zoom so the camera feels the same at every height.
@@ -90,7 +109,6 @@ void ATSCColonyCameraPawn::Tick(float DeltaSeconds)
 		AddActorWorldOffset(YawOnly.RotateVector(Local) * DragPanSpeed * ZoomScale);
 	}
 
-	// The view is a fixed isometric one (the tile constructions are drawn for it), so there is no rotation.
 	// Keep the camera over the clearing.
 	FVector Loc = GetActorLocation();
 	Loc.X = FMath::Clamp(Loc.X, -3600.f, 3600.f);
