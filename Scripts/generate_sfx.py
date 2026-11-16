@@ -120,6 +120,15 @@ SOUNDS = {
             "realistic canine voice. Isolated dry sound, no barking, people, music, or other animals."
         ),
     },
+    "boar_grunt": {
+        "seconds": 2, "loop": False, "channels": 1,
+        "prompt": (
+            "A close, dry wildlife recording of one adult Eurasian wild boar. "
+            "A quick sharp nasal snort followed by two low, raspy, throaty grunts, "
+            "the second shorter and quieter. Natural animal vocalization with a clean tail. "
+            "Isolated, without footsteps, background ambience, reverb, voices, or music."
+        ),
+    },
     "dog_howl_quiet": {
         "seconds": 5, "loop": False, "channels": 1,
         "prompt": (

@@ -257,6 +257,9 @@ public:
 	void TSCLocMisses();
 	UFUNCTION(Exec)
 	void TSCSkip();
+	/** Debug helper: jump to the start of day 1, 2 or 3 while keeping village progress. */
+	UFUNCTION(Exec)
+	void TSCDay(int32 TargetDay);
 	/** Test helper: press CUT!, select a take (0/1) and optionally confirm. */
 	UFUNCTION(Exec)
 	void TSCCut(int32 Take, int32 bConfirm);

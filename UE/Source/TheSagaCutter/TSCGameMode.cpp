@@ -2283,6 +2283,7 @@ void ATSCGameMode::DefineScenes()
 void ATSCGameMode::StartScene(int32 Idx)
 {
 	FTSCScene& S = Scenes[Idx];
+	if (S.bResolved) { return; } // A debug jump can revisit a day; keep its resolved takes.
 	S.bStarted = true;
 	S.Step = 0;
 	S.Timer = 0.f;
@@ -2382,14 +2383,21 @@ void ATSCGameMode::SimScene(int32 Idx, float Dt)
 		}
 		else if (S.Step == 3)
 		{
-			// Every fallen fog-born makes the rest fiercer (+50% damage each), so Hakon still falls if blades thin them.
-			int32 Fallen = 0;
-			for (ATSCUnit* C : EventUnits) { if (C && !C->IsAlive()) { ++Fallen; } }
+			// Every fallen fog-born makes the rest fiercer (+50% damage and HP each), so Hakon still falls if blades thin them.
+			// Hakon's bow, the woodcutters and the husky could otherwise kill all six and leave him standing: the last two
+			// cannot be cut down, so someone is always left to finish him.
+			int32 Fallen = 0, Standing = 0;
+			for (ATSCUnit* C : EventUnits) { if (C) { C->IsAlive() ? ++Standing : ++Fallen; } }
 			for (ATSCUnit* C : EventUnits)
 			{
 				if (!C || !C->IsAlive()) { continue; }
 				if (!C->bFights && C->AtHoldPos()) { C->bFights = true; }
 				C->Damage = 7.f * (1.f + 0.5f * Fallen);
+				// ...and tougher: +50% of base HP each, the gain added to what they have left
+				const float MaxHP = 75.f * (1.f + 0.5f * Fallen);
+				if (C->MaxHP < MaxHP) { C->HP += MaxHP - C->MaxHP; C->MaxHP = MaxHP; }
+				C->bInvulnerable = Standing <= 2;
+				if (C->bInvulnerable) { C->bFights = true; }
 			}
 			if (!Hunter->IsAlive() || S.Timer > 45.f) { ResolveLiving(Idx); }
 		}
@@ -3130,6 +3138,30 @@ void ATSCGameMode::TSCCut(int32 Take, int32 bConfirm)
 void ATSCGameMode::TSCSkip()
 {
 	if (Phase == ETSCPhase::Day && ActiveScene < 0) { DayTime += 20.f; }
+}
+
+void ATSCGameMode::TSCDay(int32 TargetDay)
+{
+#if !UE_BUILD_SHIPPING
+	if (TargetDay < 1 || TargetDay > 3)
+	{
+		UE_LOG(LogSaga, Warning, TEXT("Usage: TSCDay <1|2|3>"));
+		return;
+	}
+	if (Phase != ETSCPhase::Title && Phase != ETSCPhase::Day)
+	{
+		UE_LOG(LogSaga, Warning, TEXT("TSCDay is available from the title screen or during daytime. Restart the run after night begins."));
+		return;
+	}
+	if (ActiveScene >= 0 || bCutOpen || TransitionTimer > 0.f)
+	{
+		UE_LOG(LogSaga, Warning, TEXT("TSCDay: wait for the current scene or cut to finish."));
+		return;
+	}
+	if (Phase == ETSCPhase::Title) { EndPrologue(); }
+	StartDay(TargetDay);
+	UE_LOG(LogSaga, Display, TEXT("[Saga] Debug jump to day %d"), TargetDay);
+#endif
 }
 
 void ATSCGameMode::AutoPlay(float Dt)
