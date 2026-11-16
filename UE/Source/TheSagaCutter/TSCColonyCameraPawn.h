@@ -10,7 +10,7 @@ class UCameraComponent;
 class USpringArmComponent;
 
 /**
- * RTS-style colony camera: pan (WASD / edge / middle-mouse drag), zoom (mouse wheel), rotate (Q/E).
+ * RTS-style colony camera: pan (WASD / edge / middle-mouse drag), zoom (mouse wheel / Page Down / Page Up), rotate (Q/E).
  * Input is fed in by ATSCPlayerController; this pawn only accumulates it and applies it in Tick.
  */
 UCLASS()
@@ -25,7 +25,7 @@ public:
 
 	/** X = right, Y = forward, each -1..1. Called every frame while the keys are held. */
 	void AddPanInput(const FVector2D& Input) { PendingPan += Input; }
-	/** Mouse wheel delta; positive zooms in. */
+	/** Zoom steps from the wheel or keyboard; positive zooms in. */
 	void AddZoomInput(float Axis) { PendingZoom += Axis; }
 	/** -1..1, positive rotates clockwise seen from above. */
 	void AddRotateInput(float Axis) { PendingRotate += Axis; }
@@ -64,12 +64,12 @@ protected:
 	float ReferenceArmLength = 16500.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
-	float MinArmLength = 6000.f;
+	float MinArmLength = 1000.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
 	float MaxArmLength = 20000.f;
 
-	/** Arm length change per wheel notch. */
+	/** Arm length change per wheel notch or zoom key press. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
 	float ZoomStep = 1200.f;
 
