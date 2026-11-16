@@ -75,6 +75,14 @@ if [ -z "$TEAM" ]; then
 fi
 
 OUT="$ROOT/Packaged"
+UE_LICENSE_DIR="$UE_ROOT/Engine/Source/ThirdParty/Licenses"
+for notice in CEF3_Chromium_License.txt AndroidOpenSourceProject_License.txt Noto_License.txt; do
+	if [ ! -s "$UE_LICENSE_DIR/$notice" ]; then
+		echo "Packaging failed: missing or empty Unreal license $UE_LICENSE_DIR/$notice" >&2
+		exit 1
+	fi
+done
+
 # Remove the previous output so a failed run cannot pass on a stale build.
 rm -rf "$OUT/Windows"
 cmd.exe //c "$UE_ROOT\Engine\Build\BatchFiles\RunUAT.bat BuildCookRun -project=$ROOT/UE/TheSagaCutter.uproject -platform=Win64 -clientconfig=Development -build -cook -stage -pak -archive -nodebuginfo -archivedirectory=$OUT -nop4 -utf8output" 2>&1 | tee "$ROOT/Packaged_uat.log" | grep -E "error|Error:|BUILD|fatal"
@@ -84,6 +92,9 @@ if [ ! -d "$OUT/Windows" ] || ! grep -q "BUILD SUCCESSFUL" "$ROOT/Packaged_uat.l
 fi
 
 cp "$ROOT/Docs/ThirdPartyAssets.md" "$ROOT/Docs/Roboto-LICENSE.txt" "$ROOT/Docs/VikingHouseKit.md" "$OUT/Windows/" || exit 1
+cp "$UE_LICENSE_DIR/CEF3_Chromium_License.txt" \
+	"$UE_LICENSE_DIR/AndroidOpenSourceProject_License.txt" \
+	"$UE_LICENSE_DIR/Noto_License.txt" "$OUT/Windows/" || exit 1
 gate "$OUT/Windows" || exit 1
 
 ZIP="$OUT/${TEAM}_Cutsalots_Take_One.zip"
